@@ -1,0 +1,37 @@
+titre: Les valeurs
+resume: Le type Value des flux et des appels : textes, nombres, listes, objets.
+
+## Value
+| Variante | Contenu |
+|---|---|
+| Null | rien |
+| Bool | vrai ou faux |
+| Int | entier i64 |
+| Float | nombre f64 |
+| Text | texte |
+| List | liste de valeurs |
+| Map | objet (clés triées) |
+
+```rust flux.valeurs.1 "Construire et lire"
+use azure_foundation::flux::Value;
+
+let commande = Value::map([
+    ("client", "Ada".into()),
+    ("total", 240.into()),
+    ("payee", true.into()),
+    ("items", Value::list(["pomme".into(), "poire".into()])),
+]);
+let total = commande.get("total").and_then(Value::as_i64);
+let premier = commande.get("items.0").and_then(Value::as_str);
+```
+
+| Lecture | Rend |
+|---|---|
+| get("a.b.0") | la valeur à ce chemin |
+| as_bool, as_i64, as_f64, as_str | la valeur si elle a ce type |
+| as_list, as_map | la liste ou l'objet |
+| is_null | vrai pour Null |
+
+Conversions directes (into()) depuis bool, i32, i64, u32, f64, &str et String.
+
+> astuce: flux::to_rsh(&valeur) en fait une valeur de contexte rsH : {{commande.client}}, <for.i in commande.items>.

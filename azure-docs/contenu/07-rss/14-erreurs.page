@@ -1,0 +1,32 @@
+titre: Erreurs
+resume: Ce que RsS refuse, et comment il le dit.
+
+## Où est l'erreur
+Une erreur de syntaxe donne sa position dans le texte : « RsS ligne 1, colonne 10 : … ».
+
+```rss rss.erreurs.1 "Une faute de frappe"
+SELECT * FROM notes WHERE titre LIKE 'C%';
+```
+
+Écrit « SELECT * FORM notes », ce texte serait refusé à la ligne 1, avec la colonne du mot fautif.
+
+## Les erreurs courantes
+| Message (extrait) | Cause |
+|---|---|
+| type inconnu | un type qui n'existe pas en RsS (BLOB, DATE…) |
+| jamais fermé | un texte ouvert par ' sans ' de fin |
+| numéro d'app | @x.table : il faut l'identifiant de l'app (un nombre) |
+| introuvable | table, colonne ou index qui n'existe pas |
+| existe déjà | CREATE sans IF NOT EXISTS sur une table ou un index existant |
+| unique | valeur déjà présente dans une colonne UNIQUE ou PRIMARY KEY |
+| NULL | valeur manquante dans une colonne NOT NULL |
+| INT, TEXT… | valeur du mauvais type pour la colonne |
+| comparer | comparaison entre un texte et un nombre |
+| ambiguë | colonne présente dans deux tables jointes, sans préciser laquelle |
+| paramètre manquant | moins de valeurs que de ? |
+| sans BEGIN, déjà | COMMIT sans transaction, BEGIN dans une transaction |
+| Conflit | une autre connexion a modifié la table pendant la transaction |
+
+Depuis Rust, chaque erreur arrive comme un Err(String) avec ce message.
+
+> astuce: Pour écrire une valeur qui contient une apostrophe, passez-la en paramètre (?) plutôt que dans le texte : plus besoin de l'échapper.

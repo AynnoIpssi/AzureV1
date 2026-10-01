@@ -1,0 +1,15 @@
+-- Schema de test pour Db::run_file : un vrai fichier .rss.
+CREATE TABLE IF NOT EXISTS listes (
+    id INT PRIMARY KEY,
+    nom TEXT NOT NULL UNIQUE
+);
+
+CREATE TABLE IF NOT EXISTS taches (
+    id INT PRIMARY KEY,
+    liste_id INT NOT NULL,
+    titre TEXT NOT NULL,
+    fait BOOL DEFAULT false,
+    minutes INT
+);
+
+CREATE INDEX taches_par_liste ON taches (liste_id);

@@ -1,0 +1,80 @@
+titre: Modèle de boîte
+resume: Tailles, marges, espacements intérieurs, bordures et box-sizing.
+
+## Taille
+width et height fixent la taille ; min-width, max-width, min-height, max-height la bornent. Sans taille, un élément prend la place que lui donne son parent (flex, grid) ou celle de son contenu.
+
+```rsc rsc.boite.1 "Tailles bornées"
+.article { max-width: 860px; }
+.cote { width: 268px; flex-shrink: 0; }
+.vignette { width: 120px; height: 80px; }
+.contenu { min-height: 0; }
+```
+
+```apercu
+<container.ap-ligne>
+    <container.cote.ap-case><text>.cote : 268 px, ne rétrécit pas<!text><!container>
+    <container.vignette.ap-boite><text>.vignette 120 × 80<!text><!container>
+<!container>
+```
+
+## Marges et espacements
+margin écarte l'élément de ses voisins, padding écarte son contenu de ses bords. Les raccourcis prennent 1 à 4 valeurs, dans l'ordre haut, droite, bas, gauche.
+
+```rsc rsc.boite.2 "Raccourcis"
+.carte { padding: 16px 18px; margin-bottom: 12px; }
+.bloc { margin: 0 auto; }
+.ligne { padding: 8px 12px 8px 24px; }
+.pousse-a-droite { margin-left: auto; }
+```
+
+```apercu
+<container.ap-zone>
+    <container.carte.ap-boite><text>.carte : padding 16 px 18 px, 12 px de marge dessous<!text><!container>
+    <container.ligne.ap-boite><text>.ligne : 24 px à gauche<!text><!container>
+    <container.ap-ligne>
+        <container.ap-boite><text>à gauche<!text><!container>
+        <container.pousse-a-droite.ap-boite><text>margin-left: auto<!text><!container>
+    <!container>
+    <container.bloc.ap-boite><text>.bloc centré par margin: 0 auto<!text><!container>
+<!container>
+---
+.ap-ligne { margin-top: 8px; width: 100%; }
+.bloc { width: 260px; margin-top: 8px; }
+```
+
+## Bordures
+border donne épaisseur, style et couleur d'un coup ; chaque côté a sa propre propriété (border-top, border-left-width…).
+
+```rsc rsc.boite.3 "Bordures"
+.carte { border: 1px solid #262626; }
+.onglet { border-bottom: 2px solid #c9a878; }
+.note { border-left: 3px solid #9bb08f; }
+```
+
+```apercu
+<container.ap-ligne>
+    <container.carte.ap-case><text>.carte<!text><!container>
+    <container.onglet><text>.onglet<!text><!container>
+    <container.note><text>.note<!text><!container>
+<!container>
+---
+.onglet, .note { padding: 8px 12px; }
+```
+
+## box-sizing
+Par défaut (content-box), width ne compte que le contenu : padding et bordure s'ajoutent. Avec border-box, width compte tout.
+
+```rsc rsc.boite.4 "border-box"
+.champ { box-sizing: border-box; width: 100%; padding: 0 12px; }
+```
+
+```apercu "Le champ remplit la largeur sans déborder"
+<container.ap-zone>
+    <input.champ placeholder="width: 100 % et padding 12 px, sans débordement"/>
+<!container>
+---
+.champ { height: 36px; background-color: #1e1e1e; border: 1px solid #2c2c2c; border-radius: 6px; }
+```
+
+> attention: Les marges verticales de deux blocs voisins ne fusionnent pas (contrairement au web) : elles s'additionnent.

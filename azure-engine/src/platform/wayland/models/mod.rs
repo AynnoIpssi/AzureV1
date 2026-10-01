@@ -1,0 +1,9 @@
+pub mod connection;
+pub mod registry;
+pub mod shared_memory;
+pub mod window;
+pub mod object_id_allocator;
+pub mod screen_output;
+pub mod seat;
+pub mod cursor;
+pub mod clipboard;

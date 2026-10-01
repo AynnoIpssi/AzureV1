@@ -1,0 +1,45 @@
+titre: Fenêtres partagées
+resume: Envoyer une fenêtre à d'autres apps, qui l'ouvrent toutes seules.
+
+## Les genres de fenêtres
+| Genre | Qui la voit |
+|---|---|
+| Internal | Seulement l'app qui la crée |
+| External | Envoyée aux autres apps ; l'app qui la crée ne l'ouvre pas |
+| InterApp | Partagée : les autres apps et l'app qui la crée |
+
+Le scope dit à qui elle part : Followers (les apps abonnées à celle-ci) ou All (toutes les apps).
+
+## Envoyer
+Une fenêtre partagée voyage avec sa source rsH et rsC : l'app qui la reçoit n'a besoin de rien connaître, elle l'interprète et l'ouvre.
+
+```rust app.fenetres-partagees.1 "Envoyer une note aux abonnés"
+use azure_core::models::window_model::{WindowKind, WindowScope, WindowSize, WindowSpec, WindowState};
+use azure_foundation::window::models::shared_window::SharedWindow;
+
+const NOTE_RSH: &str = include_str!("../ui/note.rsh");
+const NOTE_RSC: &str = include_str!("../ui/note.rsc");
+
+.on_click(move |ctx| {
+    if ctx.clicked == Some("partager") {
+        let taille = WindowSize::new(460, 240).unwrap();
+        let spec = WindowSpec::new(app_id, taille, WindowState::Active, WindowScope::Followers, WindowKind::External).unwrap();
+        let _ = ctx.send_window(SharedWindow::new(spec, "Note partagée", NOTE_RSH, NOTE_RSC));
+    }
+})
+```
+
+> demo partagee: Ouvre une note comme l'ouvre une app qui la reçoit : la fenêtre est construite à partir de sa seule source rsH et rsC, sans rien dans le code de l'app.
+
+## S'abonner à une app
+Pour recevoir les fenêtres Followers d'une app, on la suit (follow) auprès du routeur.
+
+```rust app.fenetres-partagees.2 "Suivre une app"
+use azure_foundation::navigation::managers::navigation_manager;
+
+let mut nav = navigation_manager::connect(app.id())?;
+navigation_manager::follow(&mut nav, app.resolve("carnet")?)?;
+let window = app.window()?.navigation(nav);
+```
+
+> note: Une fenêtre Internal ne peut pas être envoyée, et une fenêtre External ou InterApp doit avoir le scope Followers ou All.

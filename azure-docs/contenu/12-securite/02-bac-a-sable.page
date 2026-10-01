@@ -1,0 +1,43 @@
+titre: Bac à sable
+resume: Ce qu'une app peut toucher, ce qui lui est interdit, et comment demander plus.
+
+## Enfermée dès le démarrage
+AzureApp enferme l'app avec Landlock, un mécanisme du noyau Linux. La règle est définitive et s'applique aussi aux programmes que l'app lance.
+
+| Permis par défaut | Interdit |
+|---|---|
+| Lire les dossiers système (/usr, /etc, /run…) | Le reste du dossier personnel |
+| Lire son propre dossier et la police | Les données et clés d'Azure, les autres apps, ~/.config/azure |
+| Lire et écrire /tmp, /var/tmp, /dev | Le réseau TCP |
+| Joindre les daemons d'Azure et Wayland | Tout autre socket : bus D-Bus, X11… |
+| | Inspecter un autre processus, envoyer un signal hors de l'enclos |
+
+## Demander plus
+[permissions] dans le manifeste ouvre ce dont l'app a besoin.
+
+```toml securite.bac-a-sable.1 "Permissions"
+[permissions]
+lecture = ~/Documents
+ecriture = ~/Documents/Boutique
+reseau = true
+stockage = false
+```
+
+| Clé | Effet |
+|---|---|
+| lecture | Dossiers lus en plus du sien |
+| ecriture | Dossiers où l'app écrit |
+| reseau | Connexions TCP permises |
+| stockage | false : pas d'accès au stockage Azure |
+
+> attention: Une permission qui ouvrirait les dossiers d'Azure, ou un de leurs parents (~, ~/.local), est refusée dès la lecture du manifeste.
+
+## Noyaux plus anciens
+Ce que Landlock ne sait pas faire sur un vieux noyau, azure run le fait avec des espaces de noms : dossier de session masqué (seuls Wayland et les daemons d'Azure y restent), l'app est le processus 1 de son espace (aucun autre processus visible), et sans la permission reseau elle a un réseau vide. Une app installée lancée autrement se relance elle-même ainsi.
+
+## En développement
+bac_a_sable = false dans [permissions] désactive l'enfermement, pour une app non installée seulement : une app installée est toujours enfermée.
+
+```rust securite.bac-a-sable.2 "Savoir si on est enfermé"
+let enfermee = azure_core::security::sandbox::is_sandboxed();
+```

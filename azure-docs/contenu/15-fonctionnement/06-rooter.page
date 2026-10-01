@@ -1,0 +1,57 @@
+titre: azure-rooter
+resume: Le routeur : messages entre apps, événements, navigation, fenêtres partagées et boîte aux lettres.
+
+## Son rôle
+azure-rooter fait circuler des **messages** entre apps. Il existe en deux versions qui partagent les mêmes idées (s'enregistrer, envoyer, recevoir, s'abonner, publier) :
+
+| Version | Où | Sert à |
+|---|---|---|
+| Routeur inter-app | Le daemon `routeur_daemon`, socket `router.sock` | Parler à une autre app |
+| IntraRouter | En mémoire, dans le processus de l'app | Naviguer entre les vues d'une même app, sans socket |
+
+## Le protocole
+C'est le plus ancien protocole d'Azure : les requêtes ne sont **pas encadrées** et **n'ont pas de réponse**. Chaque requête = opcode `u32` + champs au format `wire`. Ce que le routeur livre à une app est, lui, une trame (taille + contenu), plafonnée à 16 Mo.
+
+| Opcode | Champs | Effet |
+|---|---|---|
+| REGISTER (0) | app | L'app écoute sur cette connexion |
+| SEND (1) | expéditeur, destinataire, message | Un message à une app |
+| SUBSCRIBE (2) | app, événement | S'abonner à un événement |
+| PUBLISH (3) | app, événement, message | À tous les abonnés de l'événement |
+| UNSUBSCRIBE (4) | app, événement | Se désabonner |
+| UNREGISTER (5) | app | Se déconnecter |
+| FOLLOW (6) | abonné, app suivie | Suivre une autre app |
+| UNFOLLOW (7) | abonné, app suivie | Ne plus la suivre |
+| SEND_WINDOW (8) | expéditeur, portée, fenêtre | Une fenêtre aux abonnés, ou à toutes les apps |
+
+## Qui a le droit
+- À REGISTER, le routeur demande au manager qui est l'app annoncée et compare avec l'exécutable au bout du socket : un processus ne peut pas recevoir les messages d'une autre app. Pour un id inconnu du manager, le premier exécutable arrivé garde l'id.
+- Une connexion n'agit qu'**en son propre nom** : seule l'app enregistrée peut s'abonner, suivre ou se désinscrire pour elle-même.
+- Une seule connexion par app : une nouvelle connexion remplace l'ancienne.
+
+## La boîte aux lettres
+Un message pour une app qui ne tourne pas n'est pas perdu : il est gardé (sur disque, dans `~/.local/share/azure/rooter`) et livré dès qu'elle s'enregistre. Au plus 500 messages par app (les plus anciens partent), et jamais plus de 7 jours.
+
+## Les fenêtres partagées
+Une app peut envoyer une **fenêtre entière** à d'autres apps (`ctx.send_window`) : sa spec, son titre, sa source rsH et rsC. L'app qui la reçoit n'a besoin de rien connaître de l'émettrice : elle interprète la source et l'ouvre dans son propre fil. La portée (`WindowScope`) dit qui la reçoit : les apps qui suivent l'émettrice (FOLLOW) ou toutes.
+
+## La navigation
+Côté app, azure-foundation encode une navigation `chemin + données` dans le message (séparés par le caractère de contrôle « Unit Separator ») :
+
+```rust fonctionnement.rooter.1 "Naviguer chez une autre app"
+// Dans un on_click : ouvrir /commande/42 dans l'app d'id `caisse`.
+ctx.navigate_to(caisse, "/commande/42", "")?;
+// Ou, avec AzureApp, par son nom :
+app.navigate("caisse", "/commande/42", "")?;
+```
+
+L'app qui reçoit résout le chemin dans sa `RouteTable` et change de page au tic suivant.
+
+## Dans le code
+| Fichier | Contenu |
+|---|---|
+| managers/router.rs | Le daemon : connexions, abonnés, suivis, livraison |
+| managers/intra_router.rs | Le routeur en mémoire |
+| models/request.rs | Les opcodes |
+| models/mailbox.rs | La boîte aux lettres |
+| services/client.rs | Le client côté app |

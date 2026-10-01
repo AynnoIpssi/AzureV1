@@ -1,0 +1,47 @@
+titre: Mise en page
+resume: Lignes, colonnes, grilles, sections, pages, barres de navigation.
+
+## Lignes et colonnes
+| Composant | Rôle |
+|---|---|
+| row | Enfants côte à côte, espacés |
+| column | Enfants les uns sous les autres |
+| stack | Colonne plus serrée |
+| grid cols="2" (3, 4) | Grille de colonnes égales |
+| center | Centre son contenu |
+| spacer | Prend toute la place libre (pousse la suite au bout) |
+| divider | Filet horizontal |
+
+```rsh composants.mise-en-page.1 "Une barre avec un bouton à droite"
+<row>
+    <text>Mes notes<!text>
+    <spacer/>
+    <btn.primary#nouvelle>Nouvelle note<!btn>
+<!row>
+<divider/>
+<grid cols="3">
+    <card titre="Courses"/>
+    <card titre="Travail"/>
+    <card titre="Idées"/>
+<!grid>
+```
+
+## Pages et sections
+| Composant | Attributs |
+|---|---|
+| page | titre, description |
+| section | titre, description |
+| navbar | titre ; son contenu à droite du titre |
+| footer | pied de page |
+
+```rsh composants.mise-en-page.2 "Une page complète"
+<navbar titre="Boutique">
+    <link#aller-panier>Panier ({{nb}})<!link>
+<!navbar>
+<page titre="Catalogue" description="{{nb_produits}} produits">
+    <section titre="Nouveautés">
+        <grid cols="4"><slot/><!grid>
+    <!section>
+<!page>
+<footer><text>© Boutique<!text><!footer>
+```

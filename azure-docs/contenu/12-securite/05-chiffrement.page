@@ -1,0 +1,23 @@
+titre: Chiffrement
+resume: Ce qui est chiffré sur le disque, avec quoi, et comment c'est vérifié.
+
+## Ce qui est chiffré
+Avec ChaCha20-Poly1305 : le stockage des apps (valeurs et tables RsS), les flux persistants, la boîte aux lettres du routeur, le registre d'azure-manager, ses événements et compteurs.
+
+- Une clé par daemon (cle.bin, droits 600), illisible par les apps enfermées.
+- Un fichier modifié, ou échangé contre un autre, est refusé.
+- Les mots de passe des comptes du stockage sont dérivés par PBKDF2.
+
+## Vérifications
+| Contrôle | Détail |
+|---|---|
+| Vecteurs officiels | NIST, RFC 4231, 7914, 8439 |
+| Implémentation indépendante | Comparaison aux cas limites : remplissage de SHA-256, réductions de Poly1305, toutes les longueurs de ChaCha20-Poly1305 |
+| Comparaison d'étiquette | En temps constant, protégée contre l'optimisation du compilateur |
+| Aléa | getrandom (noyau) |
+
+```sh securite.chiffrement.1 "Relancer les tests de crypto"
+cargo test -p azure-stockage --test crypto_vectors --test crypto_oracle
+```
+
+> attention: Cette crypto est écrite à la main sans dépendance. Elle est vérifiée, mais seul un audit par des spécialistes extérieurs pourrait la certifier.

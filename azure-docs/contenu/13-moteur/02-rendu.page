@@ -1,0 +1,29 @@
+titre: Rendu
+resume: Dessiner sur un Canvas : formes, texte, images.
+
+## Le Canvas
+Un Canvas est une image en mémoire (4 octets par pixel, dans l'ordre B, G, R, A attendu par Wayland). Toutes les fonctions de dessin écrivent dedans ; la fenêtre l'envoie ensuite au compositeur.
+
+```rust moteur.rendu.1 "Dessiner hors fenêtre"
+use azure_engine::rendering::managers::renderer::{draw_rect, draw_text};
+use azure_engine::rendering::models::canvas::Canvas;
+use azure_engine::rendering::models::color::Color;
+
+let mut canvas = Canvas::new(400, 200);
+draw_rect(0, 0, 400, 200, &Color::new(18, 18, 18, 255), &mut canvas);
+let police = concat!(env!("CARGO_MANIFEST_DIR"), "/../azure-engine/src/Sora-VariableFont_wght.ttf");
+draw_text("Bonjour", police, 24, 40, 28.0, 600.0, &Color::new(231, 229, 225, 255), &mut canvas)?;
+```
+
+## Fonctions principales
+| Fonction | Rôle |
+|---|---|
+| draw_rect, draw_box | Rectangle ; boîte complète (fond, bordure, arrondi, ombre) |
+| draw_text, draw_text_with | Texte (taille, graisse, options : italique, espacement…) |
+| measure_text_width, char_positions, char_index_at | Mesurer, placer un curseur de texte |
+| load_image, draw_image, draw_image_scaled, draw_image_at | Images PNG |
+
+## Texte
+Les polices sont à graisse variable : la graisse (100 à 900) est appliquée au contour des glyphes. Le rendu est anticrénelé avec correction gamma, et les traits fins sont légèrement épaissis aux petites tailles pour rester lisibles.
+
+> note: Pas de hinting ni de crénage par paires : les petites tailles restent lisibles grâce à l'épaississement des traits et à un espacement minimal garanti entre glyphes.

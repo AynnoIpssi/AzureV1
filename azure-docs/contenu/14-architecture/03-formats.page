@@ -1,0 +1,30 @@
+titre: Formats d'échange
+resume: Le format binaire commun aux daemons : wire et frame.
+
+## wire
+Tous les daemons parlent le même format binaire maison : entiers en little-endian, octets et textes précédés de leur taille en u32. Writer écrit, Reader lit.
+
+```rust architecture.formats.1 "Écrire et relire"
+use azure_core::models::wire::{Reader, Writer};
+
+let octets = Writer::new().u32(7).str("panier").u8(1).finish();
+let mut r = Reader::new(&octets);
+let (opcode, nom, drapeau) = (r.u32()?, r.str()?, r.u8()?);
+r.finish()?; // erreur s'il reste des octets
+```
+
+## frame
+Stockage, provider, service et manager échangent des trames : taille u32 puis contenu. Une requête est un opcode puis ses arguments ; une réponse est un statut (0 = ok, 1 = erreur suivie du message) puis les valeurs.
+
+```rust architecture.formats.2 "Une requête et sa réponse"
+use azure_core::models::frame::{check_status, read_frame, write_frame};
+use azure_core::models::wire::Writer;
+
+write_frame(&mut connexion, &Writer::new().u32(OPCODE).str("cle").finish())?;
+let reponse = read_frame(&mut connexion, 1 << 20)?;
+let mut valeurs = check_status(&reponse)?; // l'erreur du daemon, ou un Reader sur les valeurs
+```
+
+Chaque daemon borne la taille des trames qu'il accepte : une trame annoncée trop grande ferme la connexion au lieu d'allouer n'importe quoi.
+
+> note: Le routeur est l'exception : ses requêtes ne sont pas encadrées (voir Routeur › Protocole).

@@ -1,0 +1,7 @@
+[app]
+name = caisse
+
+[listen panier@boutique]
+paths = total
+
+[use prix@boutique]

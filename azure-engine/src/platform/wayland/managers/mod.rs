@@ -1,0 +1,15 @@
+pub mod connection_manager;
+pub mod registry_manager;
+pub mod shared_memory_manager;
+pub mod shm_manager;
+pub mod bind_manager;
+pub mod compositor_manager;
+pub mod xdg_manager;
+pub mod surface_manager;
+pub mod window_manager;
+pub mod output_manager;
+pub mod seat_manager;
+pub mod decoration_manager;
+pub mod cursor_manager;
+pub mod activation_manager;
+pub mod clipboard_manager;

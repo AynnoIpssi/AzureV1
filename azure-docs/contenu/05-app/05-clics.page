@@ -1,0 +1,73 @@
+titre: Clics et contexte de fenêtre
+resume: Ce que reçoit on_click : le bouton cliqué, les valeurs des champs, la navigation, le stockage.
+
+## ctx
+on_click reçoit un contexte de fenêtre (ctx) :
+
+| Membre | Rôle |
+|---|---|
+| ctx.clicked | Option<&str> : l'#id du bouton ou du champ touché |
+| ctx.value(id), ctx.checked(id), ctx.number(id) | Valeurs des champs |
+| ctx.goto(chemin, payload), ctx.goto_route(nom, params, payload) | Navigation dans l'app |
+| ctx.navigate_to(app_id, chemin, payload) | Page d'une autre app |
+| ctx.scroll_to(id) | Fait défiler jusqu'à l'élément #id |
+| ctx.stockage() | Le stockage de l'app |
+| ctx.open_window(chemin, payload) | Ouvre une nouvelle fenêtre de l'app (voir La fenêtre) |
+| ctx.goto_view(vue, chemin, payload) | Page d'une autre fenêtre de l'app |
+| ctx.send_window(fenetre) | Envoie une fenêtre aux autres apps |
+| ctx.copy(texte) | Met le texte dans le presse-papiers du système |
+| ctx.flash(id, texte, durée) | Affiche un autre texte sur le bouton #id, puis rend l'ancien |
+
+```rust app.clics.1 "Un formulaire enregistré"
+.on_click(|ctx| {
+    if ctx.clicked != Some("enregistrer") {
+        return;
+    }
+    let titre = ctx.value("titre").unwrap_or_default();
+    if let Some(store) = ctx.stockage() {
+        let _ = store.set("brouillon", titre.as_str());
+    }
+    ctx.goto("/", "");
+})
+```
+
+## Un identifiant par action
+Le plus simple est de coder l'action et sa cible dans l'identifiant : #supprimer-3, #ouvrir-rapport, #onglet-2. Côté Rust, strip_prefix et split_once retrouvent les morceaux.
+
+```rust app.clics.2 "Décoder les identifiants"
+fn action(id: &str) -> Option<(&str, usize)> {
+    let (verbe, n) = id.rsplit_once('-')?;
+    Some((verbe, n.parse().ok()?))
+}
+```
+
+> astuce: Garder cette traduction dans une fonction séparée (sans fenêtre) permet de la tester : c'est ce que font le tableau de bord et Azure Docs.
+
+## Copier et confirmer
+ctx.copy met un texte dans le presse-papiers du système : il se colle ensuite dans n'importe quelle app. ctx.flash confirme l'action sur le bouton lui-même, sans reconstruire la page ni perdre le défilement.
+
+```rust app.clics.3 "Un bouton Copier"
+use std::time::Duration;
+
+.on_click(|ctx| {
+    if ctx.clicked == Some("copier-lien") {
+        ctx.copy("https://exemple.fr/partage/42");
+        ctx.flash("copier-lien", "Copié", Duration::from_millis(1500));
+    }
+})
+```
+
+> note: C'est ce que fait le bouton Copier de chaque exemple de cette documentation.
+
+## Enregistrer à la fermeture
+Ce qui est tapé dans un champ n'appelle pas on_click. Pour ne rien perdre quand la fenêtre se ferme, on_close reçoit les dernières valeurs des champs ; ctx.clicked y vaut None, et les effets (copy, flash, goto) n'ont plus lieu.
+
+```rust app.clics.4 "Garder le brouillon"
+.on_close(|ctx| {
+    if let (Some(store), Some(texte)) = (ctx.stockage(), ctx.value("texte")) {
+        store.set("brouillon", texte).ok();
+    }
+})
+```
+
+> note: C'est ainsi qu'Azure Note garde la note ouverte quand on ferme sa fenêtre.

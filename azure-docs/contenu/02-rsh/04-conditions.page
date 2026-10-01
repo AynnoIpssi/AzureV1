@@ -1,0 +1,50 @@
+titre: Conditions
+resume: Afficher un bloc ou un autre selon le contexte : if, elseif, else, match.
+
+## if, elseif, else
+La première branche vraie est affichée, les autres non. La condition s'écrit après le point.
+
+```rsh rsh.conditions.1 "Trois cas"
+<if.est_admin><text>Panneau d'administration<!text><!if>
+<elseif.est_invite><text>Accès limité<!text><!elseif>
+<else><text>Connecte-toi<!text><!else>
+```
+
+## Expressions
+| Écriture | Sens |
+|---|---|
+| est_admin | vrai si la valeur est le booléen vrai |
+| page == "accueil" | égalité (texte, nombre, booléen) |
+| nb != 0, nb > 3, nb <= 10 | comparaisons |
+| !est_admin | négation |
+| a && b, a || b | et, ou |
+| (a || b) && c | parenthèses |
+| app.actif == true | champ d'un objet |
+
+```rsh rsh.conditions.2 "Surligner la page courante"
+<if.page == "reglages"><button.lien.on#aller-reglages>Réglages<!button><!if>
+<else><button.lien#aller-reglages>Réglages<!button><!else>
+```
+
+> note: Une condition illisible, ou qui lit une variable absente, est fausse : la branche ne s'affiche pas. Rien n'est affiché par erreur.
+
+## match
+match compare une valeur à plusieurs motifs ; seule la première branche (arm) qui correspond est affichée. Plusieurs valeurs se séparent par |, et _ attrape tout le reste.
+
+```rsh rsh.conditions.3 "Une branche par valeur"
+<match.role>
+    <arm."admin"><text>Tous les droits<!text><!arm>
+    <arm."editeur" | "auteur"><text>Peut écrire<!text><!arm>
+    <arm._><text>Lecture seule<!text><!arm>
+<!match>
+```
+
+## Une page à plusieurs vues
+Un seul fichier peut porter plusieurs écrans : le code donne une variable vue, et un match choisit le contenu. Azure Docs est construite ainsi.
+
+```rsh rsh.conditions.4 "Plusieurs vues dans un fichier"
+<match.vue>
+    <arm."liste"><include src="parts/liste.rsh"/><!arm>
+    <arm."detail"><include src="parts/detail.rsh"/><!arm>
+<!match>
+```

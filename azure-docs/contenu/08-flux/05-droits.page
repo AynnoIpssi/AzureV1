@@ -1,0 +1,20 @@
+titre: Droits d'accès
+resume: Qui peut écouter un flux ou appeler une méthode, et comment le changer.
+
+## Dans le manifeste
+| Clé | Effet |
+|---|---|
+| to = caisse, stats | Seules ces apps |
+| public = true | Toutes les apps |
+| rien | Personne d'autre que l'app elle-même |
+
+L'app propriétaire peut toujours écouter son propre flux.
+
+## Depuis le tableau de bord
+Pour chaque flux partagé et chaque méthode fournie, le tableau de bord permet d'autoriser une autre app, de retirer une app, de rendre public ou privé, et de revenir au manifeste. Ces choix sont gardés par azure-manager et appliqués tout de suite.
+
+## Ce que voit l'app
+- Une écoute qui perd le droit reçoit Denied et s'arrête.
+- Un appel refusé rend une erreur.
+
+> note: Seul azure-manager peut changer les droits dans azure-service : une app ne peut pas s'accorder elle-même l'accès au flux d'une autre.

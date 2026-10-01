@@ -1,0 +1,11 @@
+[package]
+name = "azure-practice"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "azure_practice"
+path = "src/main.rs"
+
+[dependencies]
+azure-foundation = { path = "../azure-foundation" }

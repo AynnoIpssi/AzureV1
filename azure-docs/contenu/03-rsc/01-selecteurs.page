@@ -1,0 +1,95 @@
+titre: Sélecteurs et cascade
+resume: Cibler des éléments, départager les règles qui se contredisent, hériter du parent.
+
+## Une règle
+Une règle rsC est une règle CSS : un sélecteur, puis des déclarations propriété: valeur; entre accolades. Les commentaires s'écrivent /* … */.
+
+```rsc rsc.selecteurs.1 "Balise, classe, identifiant"
+text { color: #c9c6bf; }
+.carte { padding: 16px; border-radius: 8px; }
+#entete { height: 58px; }
+button.primaire { background-color: #262420; }
+```
+
+```apercu "Chaque règle touche ses éléments"
+<container.ap-zone#entete><text>#entete : 58 px de haut<!text><!container>
+<container.carte.ap-zone>
+    <text>Un texte : règle « text »<!text>
+    <button.primaire>button.primaire<!button>
+<!container>
+---
+.carte { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-top: 8px; }
+.primaire { padding: 6px 14px; color: #e0cfb3; border-radius: 6px; }
+```
+
+## Sélecteurs reconnus
+| Sélecteur | Cible |
+|---|---|
+| text | toutes les balises text |
+| .carte | les éléments de classe carte |
+| #entete | l'élément d'identifiant entete |
+| .nav.on | les éléments qui ont les deux classes |
+| .carte text | un text n'importe où dans une .carte |
+| .liste > .li | un .li enfant direct d'une .liste |
+| h + text | un text juste après un frère h |
+| h ~ text | un text après un frère h |
+| a, b | a ou b |
+| button:hover, button:active, .champ:focus | au survol, pendant l'appui, avec le focus |
+
+```rsc rsc.selecteurs.2 "Combinateurs"
+.menu > button { padding: 8px 12px; }
+.article text { line-height: 1.6; }
+.titre + .resume { margin-top: 4px; }
+.note, .attention { border-left: 3px solid #c9a878; }
+```
+
+```apercu "Enfant direct, descendant, voisin, liste"
+<container.menu.ap-zone><button>Accueil<!button><button>Docs<!button><button>Aide<!button><!container>
+<container.article><text>Dans .article, tout texte prend line-height: 1.6, même quand il revient à la ligne dans une colonne étroite comme celle-ci.<!text><!container>
+<text.titre>Un titre<!text>
+<text.resume>… et son résumé, collé par .titre + .resume<!text>
+<container.ap-ligne><container.note><text>.note<!text><!container><container.attention><text>.attention<!text><!container><!container>
+---
+.menu { display: flex; gap: 6px; }
+.menu > button { background-color: #2a2620; color: #e0cfb3; border-radius: 6px; font-size: 13px; }
+.article { width: 300px; }
+.titre { color: #f0eeea; font-size: 17px; font-weight: 700; }
+.note, .attention { padding: 6px 12px; }
+```
+
+> note: :first-child, :nth-child() et les autres pseudo-classes sont lues sans erreur mais ne correspondent jamais : seules :hover, :active et :focus sont évaluées.
+
+## Cascade
+Quand deux règles donnent une valeur différente à la même propriété, la plus spécifique gagne : un identifiant l'emporte sur n'importe quel nombre de classes, une classe sur une balise. À égalité, la dernière écrite gagne. !important passe devant tout.
+
+```rsc rsc.selecteurs.3 "Qui gagne ?"
+.carte text { color: #9d9a93; }
+.carte .info { color: #9bb08f; }
+#statut { color: #c98a6b !important; }
+```
+
+```apercu "Le plus précis gagne, !important passe devant"
+<container.carte>
+    <text>.carte text : gris<!text>
+    <text.info>.info : plus précis, vert<!text>
+    <text.info#statut>#statut avec !important : terracotta<!text>
+<!container>
+```
+
+## Héritage
+Comme en CSS, les propriétés de texte (color, font-size, font-family, font-weight, line-height, text-align…) descendent aux enfants qui ne les redéfinissent pas, ainsi que scrollbar-color.
+
+```rsc rsc.selecteurs.4 "Le texte hérite du parent"
+.app { color: #e7e5e1; font-size: 15px; font-family: "Sora"; }
+.discret { color: #8a877f; }
+```
+
+```apercu "Les textes prennent la couleur de leur conteneur"
+<container.app.ap-zone>
+    <text>Hérité de .app : clair, 15 px<!text>
+    <container.discret><text>Hérité de .discret, le parent le plus proche<!text><!container>
+<!container>
+```
+
+## Styles des composants
+Les composants d'Azure ont une feuille par défaut (classes az-…) placée avant celle de l'app : une règle de l'app passe toujours devant.

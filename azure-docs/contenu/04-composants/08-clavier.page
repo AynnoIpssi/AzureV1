@@ -1,0 +1,27 @@
+titre: Clavier
+resume: Focus, Tab, touches d'activation et Échap, sans rien écrire.
+
+## Ce qui marche tout seul
+| Touche | Effet |
+|---|---|
+| Tab, Maj+Tab | Champ ou bouton suivant, précédent (contour de focus visible) |
+| Entrée, Espace | Active un bouton, coche une case, ouvre une liste |
+| Flèches | Radio voisin, curseur (± step), note, choix segmenté, option de liste |
+| Début, Fin | Curseur au minimum, au maximum |
+| Échap | Ferme la liste ouverte, sinon active #…-fermer de la couche du dessus, sinon retire le focus |
+
+- L'ordre de Tab est celui du document ; une modale ouverte garde le focus pour elle.
+- Les conteneurs qui défilent suivent le focus.
+- Une touche qui change un champ appelle on_click comme un clic, avec l'identifiant du champ.
+
+## Dans une zone de texte
+Flèches, Début/Fin (avec Maj pour sélectionner), Retour arrière, Suppr, Ctrl+A, Ctrl+C, Ctrl+X, Ctrl+V, Ctrl+Z.
+
+## La disposition du clavier
+Chaque fenêtre tape avec la disposition du système, exactement comme les autres apps : Azure lit la carte du clavier que le bureau lui envoie (AZERTY, QWERTY, QWERTZ ou autre) et la relit si on en change en cours de route.
+- Maj, AltGr et Maj+AltGr : `&é"'(` sur la rangée du haut en AZERTY, € avec AltGr+E, @ avec AltGr+à.
+- Verr. Maj met les lettres en majuscule ; Verr. Num donne les chiffres du pavé.
+- Touches mortes : ^ puis e donne ê, ¨ puis i donne ï, ^ puis espace donne ^.
+- Les raccourcis suivent la lettre, pas la position : Ctrl+A est sur la touche A de ton clavier.
+
+> note: Le presse-papiers est celui du système : ce qu'on copie dans une app Azure se colle dans n'importe quelle autre app, Azure ou non, et inversement. Le texte affiché se sélectionne aussi à la souris (page Sélectionner et copier).

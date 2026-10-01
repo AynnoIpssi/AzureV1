@@ -1,0 +1,7 @@
+[package]
+name = "azure-rooter"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+azure-core = { path = "../azure-core" }

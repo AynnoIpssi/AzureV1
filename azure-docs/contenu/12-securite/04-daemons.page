@@ -1,0 +1,27 @@
+titre: Daemons durcis
+resume: Sockets privés, plafonds de connexions, mémoire protégée.
+
+## Sockets dans un dossier privé
+Les sockets des daemons sont dans $XDG_RUNTIME_DIR/azure/ (sinon /tmp/azure-<uid>/, ou $AZURE_RUNTIME_DIR). Chaque daemon crée ce dossier en 700 et refuse de démarrer s'il appartient à un autre compte ou si d'autres peuvent y écrire : personne ne peut se faire passer pour un daemon. Une app enfermée ne peut pas y écrire.
+
+```rust securite.daemons.1 "Où est le socket d'un daemon"
+let socket = azure_core::paths::socket("stockage");
+println!("{socket}");
+```
+
+## Plafonds
+| Règle | Valeur |
+|---|---|
+| Connexions simultanées par processus client | 64 |
+| Connexions simultanées en tout, par daemon | 1024 |
+| Message du routeur | 16 Mo |
+
+Au-delà, la connexion est fermée aussitôt.
+
+## Mémoire et fichiers
+- azure-stockage, azure-service, le routeur et le provider se rendent non inspectables : aucun autre processus ne lit leur mémoire, donc pas leurs clés.
+- Leurs dossiers sont en 700, leurs fichiers en 600.
+- Un fil qui plante en tenant un verrou ne bloque pas les autres.
+
+## Le provider
+Une app enfermée peut seulement lire son état et demander qu'un service déjà déclaré tourne. Enregistrer une commande, arrêter, relancer ou éteindre lui est refusé.

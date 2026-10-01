@@ -1,0 +1,41 @@
+titre: Sélectionner et copier
+resume: Le texte de toute app Azure se sélectionne à la souris et se copie vers n'importe quelle autre app, sans une ligne de code.
+
+## Ce que l'on a sans rien écrire
+Tout texte affiché se sélectionne, comme dans un navigateur. Cela vaut pour chaque app Azure : l'app n'a rien à déclarer ni à coder.
+
+| Geste | Effet |
+|---|---|
+| Appuyer puis glisser | Sélectionne du point d'appui jusqu'à la souris, à travers autant de textes que l'on veut, dans l'ordre de la page |
+| Double-clic | Sélectionne un mot |
+| Triple-clic | Sélectionne tout le texte (le paragraphe, la ligne de tableau, le bloc) |
+| Maj+clic | Étend la sélection précédente jusqu'au clic |
+| Ctrl+A | Sélectionne toute la page, si aucun champ n'a le focus |
+| Ctrl+C | Copie la sélection dans le presse-papiers du système |
+| Clic ailleurs | Efface la sélection |
+
+- Au survol d'un texte, le curseur prend la forme d'un I.
+- Un appui sur un bouton ou sur un champ garde son effet habituel : il ne commence pas de sélection.
+- Dans une zone de texte, la sélection est celle du champ (Maj+flèches, Ctrl+A, Ctrl+X, Ctrl+V) : voir la page Clavier.
+
+## Un presse-papiers commun à tout le système
+Ce qu'on copie dans une app Azure se colle dans n'importe quelle autre app, Azure ou non (navigateur, terminal, éditeur), et ce qu'on copie ailleurs se colle dans un champ d'une app Azure. Azure passe par le presse-papiers de Wayland : il n'y a pas de presse-papiers à part.
+
+> note: Le compositeur n'accepte une copie qu'à la suite d'une vraie action au clavier ou à la souris. Une app ne peut donc pas remplir le presse-papiers d'elle-même, en arrière-plan.
+
+## Ce qui est copié
+- Deux textes l'un sous l'autre donnent deux lignes.
+- Deux textes côte à côte sont séparés d'une espace, sauf s'ils se touchent : les morceaux coloriés d'une ligne de code se recollent sans rien ajouter.
+- Un exemple de code copié redonne le code exact, indentation comprise.
+
+```rsh composants.selection.1 "Rien à faire : ce texte se sélectionne et se copie déjà"
+<container.carte>
+    <text.carte-titre>Adresse de livraison<!text>
+    <text>12 rue des Lilas, 69003 Lyon<!text>
+    <btn#modifier>Modifier<!btn>
+<!container>
+```
+
+Ici, un glisser sur le titre et l'adresse copie deux lignes. Un appui sur « Modifier » reste un clic.
+
+> note: Une page reconstruite (après un clic qui change le modèle, par exemple) repart sans sélection.

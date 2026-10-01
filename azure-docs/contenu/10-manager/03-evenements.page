@@ -1,0 +1,25 @@
+titre: Événements et journaux
+resume: Signaler ce qui se passe dans une app, et le retrouver dans le tableau de bord.
+
+## Signaler
+
+```rust manager.evenements.1 "info, warn, error"
+let app = azure_foundation::azure_app!()?;
+app.info("import terminé : 120 notes");
+app.warn("fichier ignoré : format inconnu");
+app.error("synchronisation impossible : serveur injoignable");
+```
+
+- Les erreurs apparaissent aussi sur la page de l'app, avec leur nombre.
+- Un plantage (panic) est signalé automatiquement, avant le message habituel sur la sortie d'erreur.
+- Les 500 derniers événements sont gardés, et survivent aux redémarrages d'azure-manager.
+
+## Journaux
+La sortie des services lancés par azure-provider est écrite dans un fichier par service ; le tableau de bord en montre les dernières lignes (page Journaux).
+
+## Compteurs
+Chaque seconde, azure-manager relève dans azure-service :
+- pour chaque flux : nombre de modifications, d'auditeurs, persistance ;
+- pour chaque méthode : appels, erreurs, délais dépassés, durée moyenne, dernière erreur.
+
+Les compteurs sont cumulés : ils ne repartent pas de zéro quand azure-service redémarre.

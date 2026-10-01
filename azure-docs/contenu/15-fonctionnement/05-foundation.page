@@ -1,0 +1,107 @@
+titre: azure-foundation
+resume: Tout ce qu'une app utilise : les langages rsH et rsC, la mise en page, les composants, les événements, la fenêtre et AzureApp.
+
+## Son rôle
+azure-foundation est le **framework applicatif** d'Azure. Il transforme des fichiers rsH et rsC en fenêtre interactive, et branche l'app sur les daemons. Une app n'importe que lui.
+
+| Module | Contenu |
+|---|---|
+| app | AzureApp : le point d'entrée, tout vient du manifeste |
+| compiler | rsH, rsC, composants, interpréteur, code généré |
+| style | Le style résolu (Style), commun à tous les chemins |
+| layout | Mise en page web : boîte CSS, flux, flex, grid |
+| ui | Les nœuds (UiNode), leur dessin, l'interaction |
+| event | Traduire souris et clavier en actions sur l'arbre |
+| window | AzureWindow, sa boucle, WindowContext, barre de titre |
+| cursor | Les curseurs, dessinés par Azure |
+| navigation | Routes, navigation dans l'app et entre apps |
+| storage, flux, provider | Les clients des daemons, en expressions courtes |
+
+## Le compilateur
+Deux langages, chacun avec son lexer (texte → jetons) et son parser (jetons → arbre) :
+
+| Langage | Rôle | Produit |
+|---|---|---|
+| rsH | Balisage : `<button.btn#ok>Valider<!button>`, `if`, `for`, `{{...}}` | Un arbre d'éléments (AST) |
+| rsC | Style : sélecteurs, cascade, flex, grid, `:hover`, `:focus`, `:active` | Des règles |
+
+Le **lien** (`rsc::services::link`) fait correspondre chaque règle aux éléments de l'arbre rsH (balise, classes, id, ancêtres, combinateurs), calcule la **cascade** (spécificité, ordre, `!important`) et l'**héritage** (couleur, police…). Il signale aussi les propriétés inconnues ou sans effet.
+
+Ensuite, deux façons de construire la page :
+
+- **l'interpréteur** construit directement l'arbre de `UiNode` en mémoire, à chaque affichage. Il évalue les conditions (`if`, `elseif`, `while`), déroule les boucles `for`, remplace les `{{...}}` par les données de la page (`Context`) et déplie les **composants** ;
+- **le code généré** (`codegen`) transforme la page en code Rust dans un build.rs : les styles sont figés à la compilation. Les parties qui dépendent des données (composants, `{{...}}`) repassent par l'interpréteur au moment voulu, avec un résultat identique.
+
+## Les composants
+Toute balise qui n'est pas un élément de base est un composant :
+
+- **les champs** (`input`, `password`, `checkbox`, `radio`, `switch`, `slider`, `select`, `segmented`, `rating`…) deviennent des nœuds `TextArea` ou `Control`, dont l'app lit la valeur par `ctx.value(id)` ;
+- **les 48 composants intégrés** (`card`, `modal`, `tabs`, `table`, `toast`, `navbar`…) sont eux-mêmes écrits en rsH (`compiler/components/builtin/*.rsh`) avec leur feuille `components.rsc` ;
+- **ceux de l'app** : `components/fiche.rsh` à côté de la page devient la balise `<fiche>`. Un composant reçoit ses attributs comme variables (`{{titre}}`), son contenu (`{{contenu}}`) et affiche ce qu'on lui passe à la place de `<slot/>` ;
+- `<include src="..."/>` insère un autre fichier rsH, `<tooltip>` ajoute une infobulle.
+
+## Les nœuds
+L'arbre construit est fait de `UiNode` : `Container`, `Label`, `Button`, `TextArea`, `Control`, `Image`, `Video`. Chacun porte sa **boîte CSS** (`CssBox` : tailles, marges, padding, bordures, mode d'affichage des enfants) et sa **décoration** (fond, dégradé, bordure, arrondi, ombre, couleurs de survol, focus et appui, transitions).
+
+## La mise en page
+`layout::web_layout` calcule la position réelle de chaque nœud, comme un navigateur :
+
+- le modèle de boîte (marge, bordure, padding, contenu) avec des tailles en px, %, em, rem, vw, vh ou auto, et des min/max ;
+- le flux normal des blocs, **flexbox** (direction, retour à la ligne, grow, shrink, alignements, gap) et **grid** (colonnes, lignes, fr, placement) ;
+- des hauteurs qui suivent le contenu : le texte est découpé en lignes (`text_block`) avec la même mesure pour la mise en page et le dessin ;
+- `position: fixed` en **couches** (modales, panneaux, notifications, infobulles) avec `z-index`, et le défilement (`overflow`).
+
+## Le dessin
+`ui::services::draw_ui` parcourt l'arbre avec les boîtes calculées et appelle azure-engine : fonds et bordures (`draw_box`), textes (`draw_label`), champs (`draw_control`), images, barres de défilement, puis les couches fixes par-dessus. Les états (survol, focus, appui) et les transitions choisissent les couleurs du moment.
+
+## Les événements
+`event::dispatch` a deux fonctions publiques :
+
+- `handle_event` : un événement reçu (souris, touche, molette). Il retrouve le nœud visé (`interact::tree`, avec les mêmes boîtes que le dessin), puis gère focus, saisie de texte, sélection à la souris, cases, listes, curseurs, défilement animé, infobulles, et note le bouton cliqué ;
+- `handle_tick` : le temps qui passe (clignotement du curseur, répétition d'une touche maintenue, animations).
+
+Le clavier suit la **vraie carte XKB** envoyée par le compositeur (AZERTY, AltGr, touches mortes) ; à défaut, une table fixe. Tab et Maj+Tab déplacent le focus, Échap ferme la couche du dessus.
+
+## La fenêtre
+`AzureWindow::run` assemble tout. À chaque tour de boucle (azure-engine) :
+
+```texte fonctionnement.foundation.1 "Un tour de boucle"
+événement Wayland ──> handle_event ──> bouton cliqué ? ──> on_click(ctx)
+                                                          │
+tic (16 ms) ──> flux reçus ──> on_tick ──> navigation reçue ─┤
+                                                          ▼
+                     page à changer ? ──> résoudre la route ──> nouvel arbre
+                                                          ▼
+                     quelque chose a changé ? ──> redessiner ──> présenter
+```
+
+`WindowContext` est ce que reçoit l'app dans ses rappels :
+
+| Méthode | Rôle |
+|---|---|
+| value, checked, number | Lire les champs de la page |
+| goto, goto_route | Changer de page dans l'app |
+| navigate_to | Ouvrir une page chez une autre app (routeur) |
+| open_window, send_window | Ouvrir une fenêtre, en envoyer une à une autre app |
+| copy, flash, scroll_to | Presse-papiers, message bref sur un bouton, défilement |
+| stockage | Le stockage de l'app |
+
+La barre de titre est dessinée par Azure (icône, titre, boutons à la mac), aux couleurs du thème du bureau (`gsettings`). Les bords servent au redimensionnement.
+
+## Les routes
+Une `RouteTable` associe des chemins (`/`, `/note/{id}`) à des pages rsH + rsC, avec des données (`view_with`) : c'est ce que remplissent les `[route]` du manifeste. `navigation` s'en sert pour naviguer **dans l'app** (IntraRouter, en mémoire) et **entre apps** (azure-rooter, par socket).
+
+## AzureApp
+Le point d'entrée unique. `azure_app!()` lit le manifeste puis branche tout : enregistrement au manager, tâches de fond, enfermement (voir « La vie d'une app »). Ensuite :
+
+```rust fonctionnement.foundation.2 "Ce qu'AzureApp donne"
+let app = azure_foundation::azure_app!()?;
+app.send("caisse", "bonjour")?;                       // message (routeur)
+let mut panier = app.share("panier")?;                // flux partagé
+panier.set("total", 42)?;
+let _serveur = app.serve("prix", |_demande| Ok(3.into()))?;   // méthode servie
+app.stockage()?.set("theme", "sombre")?;              // donnée privée
+app.window()?.run();                                  // la fenêtre du manifeste
+```
+
+Les noms d'apps sont traduits en id par le manager ; chaque `share`, `listen`, `serve` et `call` doit être déclaré dans le manifeste.

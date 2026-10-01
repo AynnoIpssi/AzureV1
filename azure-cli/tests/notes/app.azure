@@ -1,0 +1,14 @@
+# App d'exemple de tests/cli.rs
+[app]
+name = notes
+title = Mes notes
+version = 2.0
+exec = notes_app
+icon = icon.png
+
+[window]
+start = /
+style = ui/app.rsc
+
+[route /]
+view = ui/accueil.rsh

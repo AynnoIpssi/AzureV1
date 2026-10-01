@@ -1,0 +1,32 @@
+titre: Jointures
+resume: Relier deux tables : JOIN, LEFT JOIN, alias.
+
+## JOIN
+Un JOIN associe chaque ligne d'une table aux lignes d'une autre qui vérifient la condition ON. Les lignes sans correspondance disparaissent.
+
+```rss rss.jointures.1 "Livres et auteurs"
+CREATE TABLE auteurs (id INT PRIMARY KEY, nom TEXT);
+CREATE TABLE livres (id INT PRIMARY KEY, titre TEXT, auteur_id INT);
+SELECT a.nom, l.titre FROM livres l JOIN auteurs a ON a.id = l.auteur_id ORDER BY l.titre;
+```
+
+## LEFT JOIN
+LEFT JOIN garde toutes les lignes de la table de gauche, même sans correspondance (les colonnes de droite valent alors NULL).
+
+```rss rss.jointures.2 "Tous les auteurs, même sans livre"
+SELECT a.nom, count(l.id) AS livres
+FROM auteurs a LEFT JOIN livres l ON l.auteur_id = a.id
+GROUP BY a.nom
+ORDER BY livres DESC, a.nom;
+```
+
+## Alias et colonnes
+- Un alias (livres l, ou livres AS l) raccourcit le nom de la table.
+- table.colonne précise d'où vient une colonne ; table.* les prend toutes.
+- Une colonne qui existe dans les deux tables doit être précisée : SELECT id … sur deux tables qui ont chacune un id est refusé (colonne ambiguë).
+
+```rss rss.jointures.3 "Préciser les colonnes"
+SELECT livres.*, auteurs.nom FROM livres JOIN auteurs ON auteurs.id = livres.auteur_id WHERE livres.id = 2;
+```
+
+> note: JOIN (INNER) et LEFT JOIN sont pris en charge ; RIGHT JOIN et FULL JOIN ne le sont pas (inverser les tables d'un LEFT JOIN donne un RIGHT JOIN).

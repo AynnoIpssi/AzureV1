@@ -1,0 +1,38 @@
+# Manifeste d'exemple lu par tests/manifest.rs
+[app]
+name = boutique
+title = Ma boutique
+version = 1.2
+
+[window]
+width = 900
+height = 600
+start = /accueil
+style = ui/app.rsc
+
+[route /accueil]
+view = ui/accueil.rsh
+name = accueil
+
+[route /produit/{id}]
+view = ui/produit.rsh
+style = ui/produit.rsc
+
+[share panier]
+to = caisse, stats
+
+[share annonces]
+public = true
+
+[listen commandes@caisse]
+paths = total, items.*.prix
+events = paye
+
+[service sync]
+command = boutique_sync
+args = --rapide "deux mots"
+health = /tmp/boutique-sync.sock
+restart = on-failure
+
+[storage]
+location = /mnt/disque/boutique

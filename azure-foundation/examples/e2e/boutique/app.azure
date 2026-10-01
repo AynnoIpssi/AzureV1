@@ -1,0 +1,26 @@
+# App de verification de bout en bout (examples/e2e_boutique.rs).
+[app]
+name = e2e-boutique
+title = Boutique (verification)
+exec = e2e_boutique
+files = app.azure
+
+[share panier]
+to = e2e-caisse
+persist = true
+
+[provide prix]
+to = e2e-caisse
+description = Prix d'un produit
+
+# Servie sans ouvrir la boutique : Azure lance cette tache de fond au
+# premier appel (verification du reveil).
+[service reveil]
+command = e2e_boutique
+args = --reveil
+restart = on-failure
+
+[provide taxe]
+to = e2e-caisse
+service = reveil
+description = Taxe, servie par la tache de fond

@@ -1,0 +1,36 @@
+// Feuille de style .rsh - le "CSS" du projet.
+// Chaque bloc `.nom { ... }` est un composant de style reutilisable :
+// defini une seule fois ici, applique a n'importe quelle balise via
+// `<tag.nom>`. Voir stylesheet_parser.rs pour les proprietes reconnues.
+
+.hero {
+    x: 5;
+    y: 5;
+    width: 90;
+    height: 20;
+    background: #1e1e32;
+    color: #ffffff;
+    font-size: 32;
+    font-weight: 700;
+}
+
+.card {
+    x: 5;
+    y: 30;
+    width: 90;
+    height: 45;
+    padding: 4;
+    background: #2a2a45;
+}
+
+.primary-button {
+    width: 30;
+    height: 10;
+    background: #3b82f6;
+    color: #ffffff;
+}
+
+.muted-text {
+    color: #a0a0b0cc;
+    font-size: 14;
+}

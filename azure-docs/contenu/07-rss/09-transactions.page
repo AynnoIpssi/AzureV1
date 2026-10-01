@@ -1,0 +1,40 @@
+titre: Transactions
+resume: Regrouper des instructions en tout ou rien ; ce qui se passe quand deux écrivent en même temps.
+
+## Sans BEGIN
+Chaque instruction est sa propre transaction : elle s'applique entièrement ou pas du tout, même si l'app ou le daemon s'arrête au milieu.
+
+## BEGIN, COMMIT, ROLLBACK
+
+```rss rss.transactions.1 "Un virement"
+BEGIN;
+UPDATE comptes SET solde = solde - 50 WHERE id = 1;
+UPDATE comptes SET solde = solde + 50 WHERE id = 2;
+COMMIT;
+```
+
+- Entre BEGIN et COMMIT, la transaction voit ses propres changements ; les autres connexions ne les voient qu'après COMMIT.
+- ROLLBACK annule tout ce qui a été fait depuis BEGIN.
+- Une instruction qui échoue dans une transaction est annulée seule : la transaction continue, et COMMIT garde le reste.
+
+## Depuis Rust
+db.transaction exécute un bloc entre BEGIN et COMMIT, et fait ROLLBACK si le bloc rend une erreur.
+
+```rust rss.transactions.2 "Tout ou rien en Rust"
+use azure_foundation::params;
+
+db.transaction(|db| {
+    let solde: i64 = db.value("SELECT solde FROM comptes WHERE id = ?", &params![1])?.unwrap_or(0);
+    if solde < 50 {
+        return Err("solde insuffisant".to_string());
+    }
+    db.run("UPDATE comptes SET solde = solde - ? WHERE id = ?", &params![50, 1])?;
+    db.run("UPDATE comptes SET solde = solde + ? WHERE id = ?", &params![50, 2])?;
+    Ok(())
+})?;
+```
+
+## Conflits
+Si une autre connexion modifie une table pendant votre transaction, COMMIT échoue avec une erreur de conflit, et rien de la transaction n'est appliqué : aucune modification n'est perdue sans le savoir. Il suffit de recommencer la transaction.
+
+> attention: Les copies d'un même Stockage partagent une connexion, donc la transaction : n'écrivez pas depuis une autre copie pendant un db.transaction.

@@ -1,0 +1,18 @@
+# Azure Note : un bloc-notes, relie a la documentation (Azure Docs).
+[app]
+name = note
+title = Azure Note
+exec = azure_note
+icon = icone.png
+files = ui
+
+# La recherche dans la doc et ses pages viennent d'Azure Docs.
+[use chercher@docs]
+[use page@docs]
+
+[window]
+title = Azure Note
+width = 1100
+height = 720
+start = /
+style = ui/note.rsc

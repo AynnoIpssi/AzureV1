@@ -1,0 +1,68 @@
+titre: Champs
+resume: Saisir du texte, cocher, choisir, glisser ; lire les valeurs depuis le code.
+
+## Texte
+| Balise | Attributs |
+|---|---|
+| <input#id/> | placeholder, value, type="password" ou "number" |
+| <password#id/>, <number#id/>, <email#id/>, <search#id/> | idem ; texte masqué, chiffres seulement… |
+| <textarea#id>texte<!textarea> | texte sur plusieurs lignes |
+
+```rsh composants.champs.1 "Un formulaire"
+<form>
+    <field label="Adresse e-mail" aide="Jamais partagée.">
+        <email#email placeholder="ada@exemple.fr"/>
+    <!field>
+    <field label="Mot de passe" erreur="{{erreur_mdp}}">
+        <password#mdp/>
+    <!field>
+    <checkbox#souvenir label="Se souvenir de moi"/>
+    <btn.primary#connexion>Se connecter<!btn>
+<!form>
+```
+
+field ajoute un libellé, une aide, ou une erreur (l'erreur remplace l'aide si elle n'est pas vide).
+
+## Choix
+| Balise | Attributs | Valeur |
+|---|---|---|
+| <checkbox#id>Texte<!checkbox> | checked, disabled, label | vrai / faux |
+| <radio#id name="groupe" value="M">M<!radio> | checked | ctx.value("groupe") = le radio coché |
+| <switch#id label="…"/> (ou toggle) | checked | vrai / faux |
+| <select#id> + <option value="fr">France<!option> (ou dropdown) | options="a, b", value | valeur choisie |
+| <segmented#id options="Jour, Semaine"/> | value | valeur choisie |
+
+```rsh composants.champs.2 "Listes et groupes"
+<select#pays value="fr">
+    <option value="fr">France<!option>
+    <option value="be">Belgique<!option>
+    <option value="ch">Suisse<!option>
+<!select>
+<radio#taille-s name="taille" value="S">S<!radio>
+<radio#taille-m name="taille" value="M" checked="true">M<!radio>
+<segmented#periode options="Jour, Semaine, Mois" value="Semaine"/>
+```
+
+## Nombres
+| Balise | Attributs |
+|---|---|
+| <slider#id/> (ou range) | value, min, max, step |
+| <progress value="35"/> | max (affichage seulement) |
+| <rating#id value="4"/> (ou stars) | max (5 par défaut), label |
+
+## Lire les valeurs
+Dans on_click (et partout où l'on a le contexte de la fenêtre), les valeurs se lisent par l'identifiant du champ.
+
+```rust composants.champs.3 "Lire le formulaire"
+.on_click(|ctx| {
+    if ctx.clicked == Some("connexion") {
+        let email = ctx.value("email").unwrap_or_default();
+        let souvenir = ctx.checked("souvenir");
+        let volume = ctx.number("volume").unwrap_or(0.0);
+        let taille = ctx.value("taille");
+        println!("{email} {souvenir} {volume} {taille:?}");
+    }
+})
+```
+
+> note: Changer un champ au clavier (Espace sur une case, flèches sur un curseur) appelle aussi on_click, avec ctx.clicked = l'identifiant du champ. De même, Entrée dans un champ d'une ligne (input, search…) le valide : une recherche se lance sans cliquer.

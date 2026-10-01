@@ -1,0 +1,13 @@
+[package]
+name = "azure-manager"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+azure-core = { path = "../azure-core" }
+azure-provider = { path = "../azure-provider" }
+azure-service = { path = "../azure-service" }
+libc = "0.2"
+
+[dev-dependencies]
+azure-stockage = { path = "../azure-stockage" }

@@ -1,0 +1,41 @@
+titre: Conditions
+resume: Comparer, combiner, chercher dans du texte, gérer NULL.
+
+## Opérateurs
+| Opérateur | Sens |
+|---|---|
+| = , <> (ou !=) | égal, différent |
+| < , <= , > , >= | comparaisons |
+| AND, OR, NOT | combiner (NOT puis AND puis OR) |
+| + - * / % | calcul |
+| \|\| | coller deux textes |
+
+```rss rss.conditions.1 "Combiner"
+SELECT nom FROM produits WHERE (prix < 2 OR stock > 100) AND NOT actif = false;
+```
+
+## LIKE, IN, BETWEEN
+
+```rss rss.conditions.2 "Chercher et encadrer"
+SELECT nom FROM produits WHERE nom LIKE 'P%';
+SELECT nom FROM produits WHERE nom LIKE '_oire';
+SELECT nom FROM produits WHERE id IN (1, 3, 5);
+SELECT nom FROM produits WHERE prix BETWEEN 1 AND 2;
+SELECT nom FROM produits WHERE prix NOT BETWEEN 1 AND 2;
+```
+
+Dans LIKE, % remplace n'importe quelle suite de caractères et _ un seul caractère. LIKE ne distingue pas majuscules et minuscules.
+
+## NULL
+NULL veut dire « pas de valeur ». Il ne se compare pas avec = : on écrit IS NULL ou IS NOT NULL.
+
+```rss rss.conditions.3 "Tester l'absence de valeur"
+SELECT nom FROM produits WHERE prix IS NULL;
+SELECT nom FROM produits WHERE prix IS NOT NULL;
+SELECT nom, coalesce(prix, 0) FROM produits;
+```
+
+> attention: prix = NULL n'est jamais vrai, même pour une ligne dont le prix est NULL : utilisez IS NULL.
+
+## Types
+Comparer un texte à un nombre est une erreur (plutôt qu'un résultat surprenant). Un INT et un FLOAT se comparent.

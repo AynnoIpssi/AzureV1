@@ -1,0 +1,10 @@
+[package]
+name = "foundation-style-test"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+azure-foundation = { path = "../../../azure-foundation" }
+azure-engine = { path = "../../../azure-engine" }
+azure-core = { path = "../../../azure-core" }
+azure-rooter = { path = "../../../azure-rooter" }

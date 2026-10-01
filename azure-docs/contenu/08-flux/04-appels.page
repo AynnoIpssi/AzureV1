@@ -1,0 +1,68 @@
+titre: Appels entre apps
+resume: Servir une méthode, l'appeler avec des arguments, attendre sa réponse.
+
+## Servir
+app.serve(methode, traitement) sert la méthode déclarée par [provide methode]. Le traitement reçoit la demande (qui appelle, avec quels arguments) et rend une valeur ou une erreur. Plusieurs demandes sont traitées en même temps, chacune dans son fil ; la méthode est servie tant que l'objet rendu existe.
+
+```rust flux.appels.1 "Servir un prix"
+use azure_foundation::flux::Value;
+
+let app = azure_foundation::azure_app!()?;
+let _prix = app.serve("prix", |demande| {
+    let produit = demande.args.get("produit").and_then(Value::as_i64).ok_or("produit attendu")?;
+    println!("demandé par l'app {}", demande.caller);
+    Ok(Value::Int(produit * 3))
+})?;
+```
+
+## Appeler
+
+```rust flux.appels.2 "Appeler et attendre"
+use azure_foundation::flux::Value;
+use std::time::Duration;
+
+let prix = app.call("boutique", "prix", Value::map([("produit", 42.into())]))?;
+println!("{:?}", prix.as_i64());
+
+// Délai choisi (5 minutes au plus).
+let lent = app.call_timeout("rapports", "generer", Value::Null, Duration::from_secs(60))?;
+
+// Si l'app appelée démarre encore : réessaie jusqu'au délai.
+let pret = app.call_wait("boutique", "prix", Value::map([("produit", 1.into())]), Duration::from_secs(10))?;
+```
+
+## Sans ouvrir l'app appelée
+Une app n'a pas à être ouverte pour répondre. Son manifeste confie la méthode à une tâche de fond (service =) ; azure install la déclare à azure-provider, sans la lancer. Au premier appel, azure-manager vérifie que l'appelant a le droit d'appeler la méthode, puis fait démarrer la tâche ; call attend qu'elle serve (10 s au plus), et les appels suivants sont immédiats.
+
+```toml flux.appels.3 "Une méthode servie en tâche de fond"
+[service methodes]
+command = azure_docs            # le binaire de l'app
+args = --service
+restart = on-failure
+
+[provide chercher]
+to = note
+service = methodes
+```
+
+```rust flux.appels.4 "Le mode tâche de fond"
+let app = azure_foundation::azure_app!()?;
+if std::env::args().any(|a| a == "--service") {
+    let _chercher = app.serve("chercher", |demande| chercher(&demande.args))?;
+    loop {
+        std::thread::park(); // sert tant que le processus vit
+    }
+}
+// sinon : la fenêtre, comme d'habitude
+```
+
+> note: C'est ainsi qu'Azure Note cherche dans la doc sans qu'Azure Docs soit ouverte.
+
+## Erreurs
+- Méthode non déclarée par [use], ou appel refusé par les droits : erreur immédiate.
+- Méthode pas servie et sans tâche de fond : erreur immédiate avec call, nouvel essai avec call_wait.
+- Erreur rendue par le traitement : elle revient telle quelle à l'appelant.
+- Un plantage (panic) dans le traitement devient une erreur, sans arrêter l'app qui sert.
+- Délai dépassé : erreur. Un appel n'est jamais rejoué deux fois.
+
+> astuce: Le tableau de bord montre, pour chaque méthode, le nombre d'appels, d'erreurs, de délais dépassés, la durée moyenne et la dernière erreur.

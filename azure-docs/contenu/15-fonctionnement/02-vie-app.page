@@ -1,0 +1,80 @@
+titre: La vie d'une app
+resume: Tout ce qui se passe, dans l'ordre, du moment où on lance une app jusqu'à sa fermeture.
+
+## 1. Le lancement
+On tape `azure run note`, ou on clique l'icône du menu (son lanceur .desktop appelle la même commande).
+
+- La commande `azure` trouve l'app dans `~/.local/share/azure/apps/note/` et lit son manifeste `app.azure`.
+- Elle s'assure que les daemons tournent : `Provider::ensure` pour manager, rooter, stockage et service. Si le provider lui-même ne tourne pas, il est lancé et on attend son socket.
+- Elle lance l'exécutable de l'app, détaché du terminal (`setsid`), sortie dans `~/.local/state/azure/apps/note.log`.
+- Entre `fork` et `exec`, elle pose l'**isolation** : nouvel espace utilisateur, de montage, de processus (l'app devient le processus 1 de son espace), et de réseau si l'app n'a pas la permission réseau. Le dossier de session est remplacé par un dossier vide où ne reviennent que le socket Wayland et celui des daemons.
+
+## 2. Le démarrage de l'app
+Le `main` de l'app appelle `azure_app!()` :
+
+```rust fonctionnement.vie-app.1 "Le main d'une app"
+fn run() -> Result<(), String> {
+    let app = azure_foundation::azure_app!()?;
+    app.window()?.run();
+    Ok(())
+}
+```
+
+`azure_app!()` fait, dans l'ordre :
+
+- **trouver le manifeste** : `$AZURE_APP_MANIFEST`, sinon `app.azure` à côté de l'exécutable (app installée), sinon le dossier du crate (développement) ;
+- **installer l'arrêt propre** : un `kill` fermera la fenêtre comme son bouton (voir azure-core › termination) ;
+- **s'enregistrer auprès d'azure-manager** (opcode REGISTER) avec le résumé du manifeste. Le manager lit l'exécutable réel au bout du socket, vérifie son empreinte SHA-256, et rend l'**id** de l'app (1000, 1001… attribués par nom). Tant que cette connexion reste ouverte, l'app est « active » au tableau de bord ;
+- **déclarer ses tâches de fond** au provider (`[service]` du manifeste) ;
+- **installer le rapport de plantage** : une panique est signalée au tableau de bord ;
+- **s'assurer que rooter, stockage et service tournent** — avant l'enfermement, car une app enfermée ne peut plus lancer de processus hors de son enclos ;
+- **s'enfermer** avec Landlock : lecture de son dossier et des dossiers système, écriture de /tmp, sockets des daemons et de Wayland, plus ce que déclare `[permissions]`. Le dossier personnel devient invisible.
+
+## 3. La fenêtre
+`app.window()` construit une `AzureWindow` depuis `[window]` (titre, taille, page de départ) et les `[route]` du manifeste. `run()` :
+
+- se connecte au compositeur Wayland (azure-engine) et crée la surface, la mémoire partagée et la barre de titre dessinée par Azure ;
+- résout la page de départ : lit le fichier rsH et le fichier rsC, les analyse, construit l'arbre de `UiNode` ;
+- entre dans la **boucle** : attendre un message du compositeur ou le prochain tic (toutes les 16 ms).
+
+## 4. Une page à l'écran
+```texte fonctionnement.vie-app.2 "Du fichier au pixel"
+accueil.rsh ──lexer──> jetons ──parser──> arbre rsH (AST)
+app.rsc     ──lexer──> jetons ──parser──> règles rsC
+                                   │
+          lien : sélecteurs × arbre, cascade, héritage
+                                   ▼
+        interpréteur : composants, {{...}}, if/for ──> arbre de UiNode
+                                   ▼
+        mise en page web : boîtes CSS, flex, grid, texte ──> rectangles en px
+                                   ▼
+        dessin : fonds, bordures, ombres, texte, images ──> Canvas (BGRA)
+                                   ▼
+        copie dans la mémoire partagée ──> wl_surface.commit ──> écran
+```
+
+Les fichiers rsH et rsC sont relus à chaque changement de page : modifier une page ne demande pas de recompiler.
+
+## 5. Un clic
+- Le compositeur envoie `wl_pointer.button` ; azure-engine le traduit en `WindowEvent`.
+- azure-foundation (`dispatch::handle_event`) retrouve le nœud sous la souris, avec les mêmes boîtes que le dessin, en tenant compte des couches `position: fixed` (modales, panneaux) et du défilement.
+- Selon le nœud : focus d'un champ, case cochée, liste ouverte… et, pour un bouton avec un `#id`, appel du `on_click` de l'app avec un `WindowContext`.
+- L'app lit les champs (`ctx.value("email")`), change de page (`ctx.goto`), ouvre une fenêtre, copie du texte, parle aux autres apps.
+- Si quelque chose a changé, la page est redessinée au prochain tic.
+
+## 6. Parler aux autres apps
+| Besoin | Chemin |
+|---|---|
+| Garder une donnée | app → stockage_daemon (chiffrée dans son espace privé) |
+| Envoyer un message, ouvrir une page chez une autre app | app → routeur_daemon → autre app |
+| Partager un état en temps réel | app → service_daemon (flux) → apps qui écoutent |
+| Demander un calcul et attendre la réponse | app → service_daemon (appel) → app qui sert la méthode |
+
+Chaque daemon vérifie **qui** parle (exécutable réel) et **si elle en a le droit** (manifeste + choix du tableau de bord, poussés par le manager).
+
+## 7. La fermeture
+- Bouton de fermeture, ou `kill` : la boucle s'arrête, `on_close` est appelé (dernière chance d'enregistrer), la connexion au routeur est libérée.
+- La connexion au manager se ferme : l'app passe « arrêtée » au tableau de bord.
+- Une app qui ne se ferme pas dans les 3 secondes après un `kill` est arrêtée de force.
+
+> note: Une app lancée par `cargo run` suit le même chemin, sans l'isolation par espaces de noms (elle n'est pas installée) mais avec Landlock.

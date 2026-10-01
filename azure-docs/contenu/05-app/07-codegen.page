@@ -1,0 +1,42 @@
+titre: Code généré
+resume: Transformer une page rsH + rsC en code Rust à la compilation.
+
+## Pourquoi
+Interprétée, une page est relue et construite à chaque affichage : parfait pendant le développement. Générée, elle devient du Rust compilé avec l'app : plus de fichier à lire, les styles sont déjà résolus.
+
+## Générer
+generate_with_rsc produit un module Rust à partir de l'arbre rsH et de la feuille rsC. On l'appelle depuis un build.rs.
+
+```rust app.codegen.1 "build.rs"
+use azure_foundation::compiler::rsc::mangers::parser::parse as parse_rsc;
+use azure_foundation::compiler::rsc::services::lexer::tokenize as tokenize_rsc;
+use azure_foundation::compiler::rsh::mangers::parser::parse as parse_rsh;
+use azure_foundation::compiler::rsh::services::lexer::tokenize as tokenize_rsh;
+use azure_foundation::compiler::services::codegen::generate_with_rsc;
+
+fn main() {
+    println!("cargo:rerun-if-changed=ui");
+    let rsh = std::fs::read_to_string("ui/accueil.rsh").unwrap();
+    let rsc = std::fs::read_to_string("ui/app.rsc").unwrap();
+    let ast = parse_rsh(tokenize_rsh(&rsh)).unwrap();
+    let sheet = parse_rsc(tokenize_rsc(&rsc)).unwrap();
+    let out = std::path::Path::new(&std::env::var("OUT_DIR").unwrap()).join("accueil.rs");
+    std::fs::write(out, generate_with_rsc(&ast, &sheet)).unwrap();
+}
+```
+
+## Utiliser
+Le module généré fournit build_ui(), et build_ui_with(&ctx) quand la page a des parties dynamiques.
+
+```rust app.codegen.2 "Inclure la page générée"
+mod accueil {
+    include!(concat!(env!("OUT_DIR"), "/accueil.rs"));
+}
+
+let noeuds = accueil::build_ui_with(&Context::new().with_text("nom", "Ada"));
+```
+
+## Parties dynamiques
+Les composants, les champs et les {{variables}} sont construits au lancement par l'interpréteur, à partir de l'arbre et de la feuille incluses dans le module : le rendu est identique, au pixel près, à celui de la page interprétée (c'est vérifié par les tests d'azure-foundation). Le reste est du Rust pur.
+
+> note: Dans le code généré, while devient une vraie boucle Rust et ses conditions sont du vrai Rust : c'est la seule différence de sens avec l'interpréteur.

@@ -1,0 +1,62 @@
+titre: Depuis Rust
+resume: L'API Db : exécuter, lire les lignes, passer des paramètres, convertir les valeurs.
+
+## Obtenir la base
+
+```rust rss.depuis-rust.1 "La base de l'app"
+let app = azure_foundation::azure_app!()?;
+let db = app.stockage()?.db();
+```
+
+## Exécuter
+| Méthode | Rend |
+|---|---|
+| db.run(sql, params) | le nombre de lignes touchées |
+| db.query(sql, params) | toutes les lignes (Rows) |
+| db.first(sql, params) | la première ligne, ou None |
+| db.value::<T>(sql, params) | la première colonne de la première ligne, ou None |
+| db.script(sql) | plusieurs instructions séparées par ;, sans paramètres |
+| db.run_file(chemin) | le contenu d'un fichier .sql |
+| db.transaction(\|db\| …) | tout ou rien (voir Transactions) |
+
+```rust rss.depuis-rust.2 "Le schéma dans un fichier"
+let schema = app.manifest().dir.join("schema.sql");
+db.run_file(schema.to_str().unwrap())?;
+```
+
+## Paramètres
+params![…] construit la liste des valeurs des ?, dans l'ordre. Types acceptés : i32, i64, u32, usize, f64, bool, &str, String, et Option de ces types (None donne NULL). Value::Null écrit aussi NULL.
+
+```rust rss.depuis-rust.3 "Paramètres"
+use azure_foundation::params;
+use azure_foundation::storage::Value;
+
+db.run("INSERT INTO produits (nom, prix, stock) VALUES (?, ?, ?)", &params!["Kiwi", 0.8, 120])?;
+db.run("UPDATE produits SET prix = ? WHERE nom = ?", &[Value::Null, "Kiwi".into()])?;
+```
+
+## Lire les lignes
+
+```rust rss.depuis-rust.4 "Rows et Row"
+let lignes = db.query("SELECT nom, prix, stock FROM produits ORDER BY nom", &[])?;
+println!("{} produits", lignes.len());
+for ligne in lignes.iter() {
+    let nom: String = ligne.get("nom")?;
+    let prix: Option<f64> = ligne.get("prix")?;
+    let stock = ligne.get_or("stock", 0i64);
+    println!("{nom} {prix:?} {stock}");
+}
+let noms: Vec<String> = lignes.column("nom")?;
+let total: i64 = db.value("SELECT sum(stock) FROM produits", &[])?.unwrap_or(0);
+```
+
+| Méthode | Rôle |
+|---|---|
+| row.get::<T>("col") | la valeur, convertie ; erreur si le type ne va pas |
+| row.get::<Option<T>>("col") | None pour NULL |
+| row.get_or("col", défaut) | la valeur, ou défaut (absente, NULL ou mauvais type) |
+| row.value("col") | la valeur brute (Value) |
+| rows.column::<T>("col") | toute une colonne |
+| rows.len(), rows.is_empty(), rows.iter() | parcourir |
+
+Conversions : TEXT vers String ; INT vers i8 … u64, usize (erreur si trop grand) et f64 ; FLOAT vers f64, f32 ; BOOL vers bool.

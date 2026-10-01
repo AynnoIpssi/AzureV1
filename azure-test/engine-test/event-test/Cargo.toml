@@ -1,0 +1,8 @@
+[package]
+name = "event-test"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+azure-engine = { path = "../../../azure-engine" }
+azure-core = { path = "../../../azure-core" }

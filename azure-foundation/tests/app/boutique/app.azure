@@ -1,0 +1,22 @@
+# App d'exemple de tests/azure_app.rs
+[app]
+name = boutique
+title = Boutique
+
+[window]
+width = 640
+height = 480
+start = /accueil
+style = ui/app.rsc
+
+[route /accueil]
+view = ui/accueil.rsh
+name = accueil
+
+[share panier]
+to = caisse
+persist = true
+
+[provide prix]
+to = caisse
+description = Prix d'un produit

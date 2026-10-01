@@ -1,0 +1,52 @@
+titre: Balises
+resume: Écrire un élément, lui donner des classes et un identifiant, le fermer.
+
+## Forme d'une balise
+Une balise s'ouvre par <nom> et se ferme par <!nom>. Les classes (autant qu'on veut) et l'identifiant se collent au nom : .classe puis #id. Le texte entre les deux balises est affiché.
+
+```rsh rsh.balises.1 "Classes, identifiant, fermeture"
+<container.carte.mise-en-avant#profil>
+    <title3>Profil<!title3>
+    <text.detail>Connecté depuis 2 jours<!text>
+    <button.primaire#modifier>Modifier<!button>
+<!container>
+```
+
+- Les classes servent au style (sélecteurs rsC .carte, .carte.mise-en-avant).
+- L'identifiant sert au style (#profil) et au code : c'est lui que reçoit ctx.clicked quand on clique un bouton, et ctx.value(id) lit la valeur d'un champ.
+- Classes et identifiant peuvent être calculés : <button#retirer-{{i}}> (voir Texte et variables).
+
+## Les éléments de base
+| rsH | Équivalent HTML | Rôle |
+|---|---|---|
+| container | div | Boîte générique, c'est elle qu'on met en flex ou en grid |
+| title, title1, title2, title3 | h1, h1, h2, h3 | Titres, du plus grand au plus petit |
+| text | p | Texte ; revient à la ligne tout seul |
+| button | button | Cliquable ; son #id est remis au code |
+| textarea | textarea | Zone de texte sur plusieurs lignes |
+| image src="…" | img | Image PNG |
+| video src="…" | video | Emplacement réservé (la vidéo n'est pas décodée) |
+
+## Balises qui se ferment seules
+Un composant ou un champ sans contenu peut s'écrire <nom/>. Les éléments de base (container, text, image…) se ferment toujours par <!nom>, même vides.
+
+```rsh rsh.balises.2 "Formes courtes"
+<input#email placeholder="adresse@exemple.fr"/>
+<checkbox#cgu label="J'accepte les conditions"/>
+<divider/>
+<image.avatar src="images/ada.png"><!image>
+```
+
+## Attributs
+Les attributs s'écrivent comme en HTML : nom="valeur". Ils servent surtout aux composants et aux champs (placeholder, value, label, titre…). Leur valeur peut contenir {{variables}}.
+
+```rsh rsh.balises.3 "Un composant avec des attributs"
+<card titre="Commandes" description="{{nb}} en attente">
+    <btn.primary#voir>Voir<!btn>
+<!card>
+```
+
+> note: Toute balise qui n'est pas un élément de base est un composant : les 48 composants d'Azure (card, modal, tabs, table…) ou ceux de l'app. Voir la section Composants.
+
+## Erreurs
+Une balise jamais fermée, ou fermée par une autre (<container>…<!text>), est une erreur de lecture indiquée avec sa ligne et sa colonne. La page n'est pas affichée à moitié : l'erreur s'affiche à la place.

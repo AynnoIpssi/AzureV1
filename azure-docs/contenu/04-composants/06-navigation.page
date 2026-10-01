@@ -1,0 +1,37 @@
+titre: Navigation
+resume: Boutons, liens, menus, onglets, fil d'Ariane, étapes, pagination.
+
+## Boutons et liens
+btn (variantes .primary, .danger, .ghost, .small) et link sont des boutons : leur #id arrive dans ctx.clicked. ancre vers="id" fait défiler jusqu'à l'élément #id.
+
+```rsh composants.navigation.1 "Boutons"
+<btn.primary#enregistrer>Enregistrer<!btn>
+<btn.danger#supprimer>Supprimer<!btn>
+<link#aide>Besoin d'aide ?<!link>
+<ancre vers="faq">Questions fréquentes<!ancre>
+```
+
+## Menus et onglets
+| Composant | Attributs | Boutons produits |
+|---|---|---|
+| menu + menu-item | actif="true" | l'#id de chaque menu-item |
+| tabs #id | items="A, B, C", actif="B" | #id-0, #id-1, #id-2 |
+| pagination #id | pages="6", page="2" | #id-1 … #id-6 |
+| breadcrumb | items="Accueil, Notes, Courses" | — |
+| steps | items="Panier, Livraison, Paiement", courant="2" | — |
+
+```rsh composants.navigation.2 "Onglets et pagination"
+<tabs#vue items="Liste, Calendrier, Carte" actif="{{payload}}"/>
+<pagination#page pages="{{nb_pages}}" page="{{page}}"/>
+<steps items="Panier, Livraison, Paiement" courant="2"/>
+```
+
+```rust composants.navigation.3 "Réagir à un onglet"
+.on_click(|ctx| {
+    let Some(clique) = ctx.clicked else { return };
+    if let Some(i) = clique.strip_prefix("vue-") {
+        let vue = ["Liste", "Calendrier", "Carte"][i.parse::<usize>().unwrap_or(0)];
+        ctx.goto("/", vue);
+    }
+})
+```

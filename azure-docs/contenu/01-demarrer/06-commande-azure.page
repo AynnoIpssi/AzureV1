@@ -1,0 +1,37 @@
+titre: La commande azure
+resume: Installer, lister, lancer et désinstaller des apps ; démarrer Azure à la connexion.
+
+## Résumé
+| Commande | Effet |
+|---|---|
+| azure setup [--from <dossier>] | Installe les binaires système d'Azure |
+| azure install <dossier> [--bin <exe>] | Installe l'app décrite par <dossier>/app.azure |
+| azure uninstall <app> | La désinstalle |
+| azure list | Les apps installées |
+| azure run <app> [arguments…] | La lance, isolée, après avoir démarré les daemons |
+| azure autostart on [--now] / off / status | Démarre Azure à chaque connexion (systemd utilisateur) |
+
+## Installer une app
+install lit le manifeste, copie le binaire (exec, ou --bin) et les fichiers, crée l'entrée du lanceur, puis enregistre l'app auprès d'azure-manager avec l'empreinte SHA-256 de son binaire : c'est elle qui prouvera ensuite son identité.
+
+```sh demarrer.commande-azure.1 "Installer depuis les sources"
+cargo build --release -p notes
+azure install ~/Dev/notes --bin target/release/notes
+azure list
+```
+
+## Lancer une app
+azure run démarre les daemons si besoin, puis lance l'app dans ses propres espaces de noms : dossier de session masqué, aucun autre processus visible, pas de réseau sans la permission. C'est aussi ce qu'utilise l'entrée du lanceur.
+
+```sh demarrer.commande-azure.2 "Lancer avec des arguments"
+azure run notes --ouvrir courses
+```
+
+> note: Réinstaller une app remplace son binaire : son empreinte change, azure-manager la réenregistre en gardant son identifiant et ses données. Une app en cours d'exécution ne peut pas être réinstallée.
+
+## Démarrer à la connexion
+
+```sh demarrer.commande-azure.3 "Service systemd utilisateur"
+azure autostart on --now
+systemctl --user status azure-provider
+```

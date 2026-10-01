@@ -1,0 +1,14 @@
+[package]
+name = "azure-foundation"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+azure-core = { path = "../azure-core" }
+azure-engine = { path = "../azure-engine" }
+azure-rooter = { path = "../azure-rooter" }
+azure-stockage = { path = "../azure-stockage" }
+azure-provider = { path = "../azure-provider" }
+libc = "0.2"
+azure-service = { path = "../azure-service" }
+azure-manager = { path = "../azure-manager" }

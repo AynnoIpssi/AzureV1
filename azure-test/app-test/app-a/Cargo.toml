@@ -1,0 +1,9 @@
+[package]
+name = "app-a"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+azure-engine = { path = "../../../azure-engine" }
+azure-foundation = { path = "../../../azure-foundation" }
+azure-rooter = { path = "../../../azure-rooter" }

@@ -1,0 +1,37 @@
+# Portfolio : mon portfolio, en app Azure (v1).
+# Le contenu s'ecrit a la main dans ui/*.rsh : chaque [a remplir] est a
+# remplacer. Relu a chaque navigation : pas besoin de recompiler.
+[app]
+name = portfolio
+title = Portfolio
+version = 0.1
+exec = azure_portfolio
+files = ui
+
+# La page Azure ouvre la doc et les apps d'Azure : le routeur y envoie la
+# page, le manager les lance si elles sont fermees.
+[open docs]
+[open note]
+[open dashboard]
+
+[window]
+title = Portfolio
+width = 1200
+height = 840
+start = /
+style = ui/app.rsc
+
+[route /]
+view = ui/presentation.rsh
+
+[route /etudes]
+view = ui/etudes.rsh
+
+[route /projets]
+view = ui/projets.rsh
+
+[route /azure]
+view = ui/azure.rsh
+
+[route /veille]
+view = ui/veille.rsh

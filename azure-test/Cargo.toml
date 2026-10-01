@@ -1,0 +1,22 @@
+[package]
+name = "AzureTest"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+azure-engine = { path = "../azure-engine" }
+
+[workspace]
+members = [
+    "app-test/app-a",
+    "app-test/app-b",
+    "app-test/app-c",
+    "engine-test/event-test",
+    "foundation-test/window-test",
+    "foundation-test/navigation-test",
+    "foundation-test/layout-test",
+    "foundation-test/ui-test",
+    "foundation-test/style-test",
+    "foundation-test/event-test",
+    "foundation-test/compiler-test",
+]

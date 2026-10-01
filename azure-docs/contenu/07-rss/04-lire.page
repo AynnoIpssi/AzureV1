@@ -1,0 +1,39 @@
+titre: Lire
+resume: SELECT : colonnes, expressions, tri, pagination, doublons.
+
+## Colonnes et expressions
+
+```rss rss.lire.1 "Choisir ce qu'on lit"
+SELECT * FROM produits;
+SELECT nom, prix FROM produits;
+SELECT nom, prix * 1.2 AS prix_ttc, stock > 0 AS disponible FROM produits;
+SELECT 'Produit : ' || nom FROM produits;
+SELECT 1 + 2 * 3, 7 / 2, 7.0 / 2;
+```
+
+AS nomme une colonne du résultat. La division de deux entiers est entière (7 / 2 vaut 3) ; avec un nombre à virgule, elle ne l'est pas (7.0 / 2 vaut 3.5).
+
+## Filtrer, trier, paginer
+
+```rss rss.lire.2 "WHERE, ORDER BY, LIMIT, OFFSET"
+SELECT nom, prix FROM produits WHERE actif = true ORDER BY prix DESC, nom ASC LIMIT 10 OFFSET 20;
+```
+
+- ORDER BY trie sur une ou plusieurs colonnes (ou alias), ASC par défaut.
+- LIMIT garde les n premières lignes, OFFSET en saute d'abord.
+
+## Sans doublons
+
+```rss rss.lire.3 "DISTINCT"
+SELECT DISTINCT categorie FROM produits ORDER BY categorie;
+```
+
+## Paramètres
+Les valeurs venues de l'utilisateur passent par des ?, remplis à part : jamais collées dans le texte, donc aucune injection possible.
+
+```rust rss.lire.4 "Une recherche sûre"
+use azure_foundation::params;
+
+let saisie = ctx.value("recherche").unwrap_or_default();
+let lignes = db.query("SELECT nom FROM produits WHERE nom LIKE ? ORDER BY nom LIMIT ?", &params![format!("%{saisie}%"), 20])?;
+```

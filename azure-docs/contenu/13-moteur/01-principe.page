@@ -1,0 +1,22 @@
+titre: Principe
+resume: Une fenêtre à l'écran sans aucun framework : ce que fait azure-engine.
+
+## Du Rust jusqu'au pixel
+azure-engine est la couche la plus basse d'Azure. Il ouvre la fenêtre en parlant directement le protocole Wayland au compositeur (GNOME, KDE…) sur son socket, sans bibliothèque : chaque message est construit à la main.
+
+- Les pixels sont écrits dans une mémoire partagée avec le compositeur (memfd + SCM_RIGHTS) : pas de copie.
+- Le rendu est entièrement logiciel, sur le processeur.
+- Dépendances : libc, et ttf-parser pour lire les polices.
+
+## Ce qu'il sait faire
+| Domaine | Détail |
+|---|---|
+| Fenêtre | xdg-shell, titre, redimensionnement, plein écran, fermeture propre |
+| Entrées | Souris (boutons, déplacement, molette et pavé tactile distingués), clavier (codes evdev, répétition) |
+| Curseurs | Formes dessinées par Azure (main, barre de texte, attente…) |
+| Formes | Rectangles arrondis, bordures (pleines, tirets, pointillés, doubles), ombres, dégradés, transparence |
+| Texte | Polices TTF à graisse variable, anticrénelage, italique synthétique, espacement |
+| Images | PNG décodé par Azure (inflate écrit à la main), mise à l'échelle |
+
+## Qui l'utilise
+Une app ne l'appelle presque jamais directement : azure-foundation construit l'arbre de la page, le met en page, puis le dessine avec les fonctions du moteur. La barre de titre elle-même est dessinée par Azure, aux couleurs du thème du bureau.

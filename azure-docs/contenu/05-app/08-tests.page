@@ -1,0 +1,49 @@
+titre: Tester une app
+resume: Rendre une page sans fenêtre, vérifier ce qu'elle affiche, simuler des clics.
+
+## Rendre une page
+RouteTable::resolve construit une page comme la fenêtre le ferait ; draw_ui la dessine dans une image en mémoire. Aucune fenêtre ni daemon n'est nécessaire.
+
+```rust app.tests.1 "Une page rendue dans un test"
+use azure_engine::rendering::models::canvas::Canvas;
+use azure_foundation::navigation::models::route::Route;
+use azure_foundation::ui::services::draw_ui::draw_ui;
+
+#[test]
+fn la_page_d_accueil_s_affiche() {
+    let routes = mon_app::routes(std::path::Path::new("ui"));
+    let noeuds = routes.resolve(&Route::new("/", "")).expect("page /");
+    let mut image = Canvas::new(1280, 824);
+    draw_ui(&noeuds, (0, 0, 1280, 824), &mut image, -1, -1, false);
+}
+```
+
+## Vérifier le contenu
+L'arbre de nœuds se parcourt : on y retrouve les textes et les boutons affichés.
+
+```rust app.tests.2 "Lire les textes affichés"
+use azure_foundation::ui::models::ui_node::UiNode;
+
+fn textes(noeuds: &[UiNode], out: &mut Vec<String>) {
+    for n in noeuds {
+        match n {
+            UiNode::Label(l) => out.push(l.text.clone()),
+            UiNode::Button(b) => out.push(b.text.clone()),
+            UiNode::Container(c) => textes(&c.children, out),
+            _ => {}
+        }
+    }
+}
+```
+
+## Simuler un clic
+button_id_at dit quel bouton est sous un point, exactement comme un vrai clic (défilement et couches compris).
+
+```rust app.tests.3 "Quel bouton est sous la souris ?"
+use azure_foundation::ui::services::interact::button_id_at;
+
+let id = button_id_at(&noeuds, 640, 300, (0, 0, 1280, 824));
+assert_eq!(id.as_deref(), Some("valider"));
+```
+
+> astuce: Séparer « quel clic mène où » dans une fonction pure (action(id) -> Action) rend les clics testables sans fenêtre, comme dans azure-dashboard et azure-docs.

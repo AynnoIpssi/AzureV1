@@ -1,0 +1,11 @@
+[package]
+name = "azure-ide"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "azure_ide"
+path = "src/main.rs"
+
+[dependencies]
+azure-foundation = { path = "../azure-foundation" }

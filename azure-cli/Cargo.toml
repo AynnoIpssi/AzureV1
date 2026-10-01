@@ -1,0 +1,15 @@
+[package]
+name = "azure-cli"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "azure"
+path = "src/main.rs"
+
+[dependencies]
+azure-core = { path = "../azure-core" }
+azure-manager = { path = "../azure-manager" }
+azure-provider = { path = "../azure-provider" }
+azure-service = { path = "../azure-service" }
+libc = "0.2"

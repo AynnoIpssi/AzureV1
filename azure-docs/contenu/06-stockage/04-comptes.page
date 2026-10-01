@@ -1,0 +1,23 @@
+titre: Comptes
+resume: Les comptes qu'une app crée pour protéger ce qu'elle partage.
+
+## Rôles
+| Rôle | Droits sur une donnée protégée |
+|---|---|
+| Reader | Lire |
+| Writer | Lire et modifier la valeur (pas la supprimer ni changer l'accès) |
+
+## Gérer les comptes
+
+```rust stockage.comptes.1 "Créer, lister, retirer"
+use azure_core::models::storage_model::Role;
+
+store.add_account("maman", "1234", Role::Reader)?;
+store.add_account("papa", "abcd", Role::Writer)?;
+for (utilisateur, role) in store.accounts()? {
+    println!("{utilisateur} : {role:?}");
+}
+store.remove_account("papa")?;
+```
+
+Les mêmes comptes protègent les valeurs partagées et les tables RsS partagées de l'app.

@@ -1,0 +1,18 @@
+[package]
+name = "azure-testeur"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "azure_testeur"
+path = "src/main.rs"
+
+[dependencies]
+azure-foundation = { path = "../azure-foundation" }
+azure-note = { path = "../azure-note" }
+libc = "0.2"
+
+[dev-dependencies]
+azure-core = { path = "../azure-core" }
+azure-engine = { path = "../azure-engine" }
+azure-manager = { path = "../azure-manager" }

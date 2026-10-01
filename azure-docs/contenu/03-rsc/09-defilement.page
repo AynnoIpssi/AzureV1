@@ -1,0 +1,69 @@
+titre: Défilement
+resume: Faire défiler un conteneur, en vertical ou en horizontal ; la barre de défilement.
+
+## overflow
+overflow-y: auto fait défiler verticalement un conteneur dont le contenu dépasse ; overflow-x: auto horizontalement. hidden coupe ce qui dépasse sans défiler.
+
+```rsc rsc.defilement.1 "Une liste qui défile"
+.liste { height: 320px; overflow-y: auto; }
+.frise { display: flex; flex-direction: row; overflow-x: auto; }
+.cadre { overflow: hidden; }
+```
+
+```apercu "Hauteur réduite à 140 px pour l’aperçu"
+<container.liste.ap-zone>
+    <text>Élément 1<!text>
+    <text>Élément 2<!text>
+    <text>Élément 3<!text>
+    <text>Élément 4<!text>
+    <text>Élément 5<!text>
+    <text>Élément 6<!text>
+    <text>Élément 7<!text>
+    <text>Élément 8<!text>
+    <text>Élément 9<!text>
+    <text>Élément 10<!text>
+<!container>
+---
+.liste { display: flex; flex-direction: column; gap: 8px; height: 140px; }
+.liste { scrollbar-color: #3b3935; }
+```
+
+## Comportement
+- La molette et le pavé tactile font défiler ce qui est sous la souris, le plus profond d'abord : un conteneur intérieur absorbe le défilement tant qu'il n'est pas en butée.
+- La molette est accélérée ; le pavé tactile suit le doigt.
+- Maj + molette, ou une molette inclinée, fait défiler horizontalement.
+- Le défilement est animé en douceur.
+- La barre de défilement se saisit et se fait glisser à la souris.
+- Tab fait défiler jusqu'à l'élément qui prend le focus.
+
+## Couleur de la barre
+scrollbar-color donne la couleur de la poignée (la seconde couleur, celle de la piste, est ignorée). Elle est héritée : une règle sur la racine colore toutes les barres.
+
+```rsc rsc.defilement.2 "Barres discrètes"
+.app { scrollbar-color: #3b3935 #121212; }
+```
+
+```apercu "La barre prend les couleurs de .app"
+<container.app>
+    <text>Ligne 1<!text>
+    <text>Ligne 2<!text>
+    <text>Ligne 3<!text>
+    <text>Ligne 4<!text>
+    <text>Ligne 5<!text>
+    <text>Ligne 6<!text>
+    <text>Ligne 7<!text>
+    <text>Ligne 8<!text>
+<!container>
+---
+.app { display: flex; flex-direction: column; gap: 8px; height: 110px; overflow-y: auto; }
+```
+
+## Défiler jusqu'à un élément
+Le composant <ancre vers="id"> fait défiler jusqu'à l'élément #id ; depuis le code, ctx.scroll_to("id").
+
+```rsh rsc.defilement.3 "Liens d'ancre"
+<ancre vers="installation">Aller à l'installation<!ancre>
+<title2#installation>Installation<!title2>
+```
+
+> astuce: Dans une colonne flex, un enfant ne défile que s'il a flex-grow: 1 et min-height: 0 : sans min-height: 0, il grandit avec son contenu au lieu de défiler.

@@ -1,0 +1,17 @@
+# Ide : app Azure (creee par `azure new`).
+[app]
+name = ide
+title = Ide
+version = 0.1
+exec = azure_ide
+files = ui
+
+[window]
+title = Ide
+width = 900
+height = 600
+start = /
+style = ui/app.rsc
+
+[route /]
+view = ui/accueil.rsh

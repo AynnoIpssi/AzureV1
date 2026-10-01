@@ -1,0 +1,71 @@
+titre: azure-stockage
+resume: Le seul processus qui écrit les données des apps : espace privé chiffré, partages, comptes et RsS.
+
+## Son rôle
+Aucune app n'écrit ses données elle-même : elles passent toutes par `stockage_daemon`. C'est lui qui décide qui lit quoi, et tout ce qu'il écrit est chiffré.
+
+- Chaque app a un **espace privé** que seule elle peut lire.
+- Elle peut **partager** une donnée : publique (toute app la lit) ou protégée (il faut un compte créé par l'app propriétaire, avec un rôle).
+- Elle a une base **RsS**, le SQL d'Azure, exécutée par le daemon.
+
+## La connexion
+- L'app commence par HELLO avec son id. Le daemon vérifie auprès du manager que c'est bien elle (même exécutable ou même empreinte) ; toutes les requêtes suivantes agissent **en son nom**.
+- Chaque requête reçoit une réponse (statut + valeurs).
+
+| Opcodes | Rôle |
+|---|---|
+| HELLO (0) | Se présenter |
+| PUT, GET, DELETE, KEYS (1 à 4) | Espace privé : clé → valeur |
+| SET_LOCATION, LOCATION (5, 6) | Choisir où vit l'espace privé |
+| ADD_ACCOUNT, REMOVE_ACCOUNT, ACCOUNTS (10 à 12) | Comptes qui protègent les partages |
+| SHARE, UNSHARE, READ_SHARED, WRITE_SHARED, SHARED_LIST (20 à 24) | Partages |
+| RSS (30) | Exécuter du RsS |
+
+## Sur le disque
+```texte fonctionnement.stockage.1 "Le dossier du stockage (700)"
+~/.local/share/azure/stockage/
+  master.key               clé maîtresse : 32 octets aléatoires (600)
+  apps.bin                 quel id correspond à quel exécutable
+  locations.bin            apps dont l'espace privé est ailleurs
+  private/<app>/<clé>.bin  données privées (et tables RsS <table>.rss)
+  shared/<partage>.bin     données partagées
+  accounts/<app>.bin       comptes créés par une app
+```
+
+- Tout est **chiffré et authentifié** (ChaCha20-Poly1305) : un fichier modifié est refusé, pas relu de travers.
+- Chaque app a **sa propre clé**, dérivée de la clé maîtresse.
+- Les **noms de fichiers sont des HMAC** : même les noms des clés ne se lisent pas sur le disque.
+- Les mots de passe des comptes ne sont jamais gardés : seulement PBKDF2(mot de passe, sel), 100 000 tours.
+- Une app peut placer son espace privé ailleurs (`SET_LOCATION`), par exemple sur un autre disque ; il reste chiffré.
+
+## RsS
+Le moteur RsS (`rss/`) est un petit SQL complet, exécuté dans le daemon sur les données chiffrées de l'app :
+
+```texte fonctionnement.stockage.2 "Le chemin d'une requête RsS"
+texte ──lexer──> jetons ──parser (descente récursive)──> instructions (ast)
+      ──engine──> tables en mémoire + index ──store──> fichiers chiffrés
+```
+
+| Élément | Ce qu'il fait |
+|---|---|
+| lexer, parser | Mots-clés insensibles à la casse ; priorités OR, AND, NOT, comparaisons, + − ‖, * / %, moins unaire |
+| engine | CREATE/DROP TABLE et INDEX, INSERT, UPDATE, DELETE, SELECT avec jointures, GROUP BY, HAVING, ORDER BY, LIMIT, agrégats et fonctions |
+| table | Schéma, lignes, index (BTreeMap valeur → lignes), reconstruits en mémoire |
+| store | Un fichier chiffré par table + un catalogue ; COMMIT par journal |
+| value | Types INT, FLOAT, TEXT, BOOL et NULL |
+
+**Les transactions** sont tout ou rien, même si le daemon est tué au milieu : chaque fichier modifié est écrit à côté (`.rss-new`), puis la liste des changements dans `rss-journal.bin`, puis tout est appliqué, puis le journal est effacé. Au redémarrage, un journal présent = un COMMIT décidé mais interrompu : il est terminé.
+
+**Les paramètres** `?` sont passés à part, jamais collés dans le texte : pas d'injection. **Les tables partagées** (`SHARE TABLE t PUBLIC | PROTECTED`) se lisent depuis une autre app avec `@<app>.t`.
+
+## Côté app
+```rust fonctionnement.stockage.3 "Stocker depuis une app"
+let store = app.stockage()?;
+store.set("theme", "sombre")?;
+let theme: Option<String> = store.get("theme")?;
+let db = store.db();
+db.run("INSERT INTO notes (titre) VALUES (?)", &params!["Courses"])?;
+let total = db.value::<i64>("SELECT count(*) FROM notes", &[])?;
+```
+
+> note: Le daemon est le seul à connaître la clé maîtresse. Une app enfermée ne voit pas le dossier du stockage : même en contournant le daemon, elle ne lirait que du chiffré.

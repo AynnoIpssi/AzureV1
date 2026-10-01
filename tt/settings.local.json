@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xargs -I{} echo {})",
+      "Bash(cargo build *)",
+      "Bash(cargo test *)",
+      "Bash(rm src/mod.rs)",
+      "Bash(rm -r src/app)"
+    ]
+  },
+  "skillOverrides": {
+    "anthropic-skills:docs": "name-only",
+    "anthropic-skills:docx": "name-only",
+    "anthropic-skills:pdf": "name-only",
+    "anthropic-skills:xlsx": "name-only"
+  }
+}

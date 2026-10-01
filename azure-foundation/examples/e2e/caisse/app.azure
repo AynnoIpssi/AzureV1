@@ -1,0 +1,10 @@
+# App de verification de bout en bout (examples/e2e_caisse.rs).
+[app]
+name = e2e-caisse
+title = Caisse (verification)
+exec = e2e_caisse
+files = app.azure
+
+[listen panier@e2e-boutique]
+[use prix@e2e-boutique]
+[use taxe@e2e-boutique]

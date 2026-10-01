@@ -1,0 +1,51 @@
+titre: Introduction
+resume: Ce qu'est RsS, où il tourne, et une première base en quelques lignes.
+
+## Du SQL, dans le stockage d'Azure
+RsS (RustSql) est un SQL classique : CREATE TABLE, INSERT, SELECT, UPDATE, DELETE, jointures, agrégats, index, transactions. Il est exécuté par le daemon azure-stockage, dans l'espace privé de l'app :
+- chaque app a sa propre base, que les autres ne voient pas ;
+- les tables sont chiffrées sur le disque, comme le reste du stockage ;
+- elles survivent aux redémarrages de l'app et du daemon ;
+- une table peut être partagée avec les autres apps, publiquement ou avec des comptes.
+
+## Première base
+
+```rust rss.introduction.1 "Une liste de tâches"
+use azure_foundation::params;
+
+fn main() -> Result<(), String> {
+    let app = azure_foundation::azure_app!()?;
+    let db = app.stockage()?.db();
+    db.script("CREATE TABLE IF NOT EXISTS taches (id INT PRIMARY KEY, titre TEXT NOT NULL, faite BOOL DEFAULT false)")?;
+    db.run("INSERT INTO taches (titre) VALUES (?)", &params!["Écrire la doc"])?;
+    for tache in db.query("SELECT id, titre FROM taches WHERE faite = false ORDER BY id", &[])?.iter() {
+        let (id, titre): (i64, String) = (tache.get("id")?, tache.get("titre")?);
+        println!("{id}. {titre}");
+    }
+    Ok(())
+}
+```
+
+```rss rss.introduction.2 "Le même SQL, seul"
+CREATE TABLE IF NOT EXISTS taches (id INT PRIMARY KEY, titre TEXT NOT NULL, faite BOOL DEFAULT false);
+INSERT INTO taches (titre) VALUES ('Écrire la doc');
+SELECT id, titre FROM taches WHERE faite = false ORDER BY id;
+```
+
+## Ce que couvre cette section
+| Page | Contenu |
+|---|---|
+| Tables | Créer, typer, contraindre, supprimer, inspecter |
+| Écrire | INSERT, UPDATE, DELETE |
+| Lire | SELECT, tri, pagination, DISTINCT |
+| Conditions | Opérateurs, LIKE, IN, BETWEEN, NULL |
+| Fonctions et agrégats | upper, round…, count, sum…, GROUP BY, HAVING |
+| Jointures | JOIN, LEFT JOIN, alias |
+| Index | Accélérer les recherches, imposer l'unicité |
+| Transactions | Tout ou rien, conflits |
+| Depuis Rust | L'API Db, params!, lecture des résultats |
+| Afficher dans une page | Des lignes SQL vers une page rsH |
+| Tables partagées | Ouvrir une table aux autres apps |
+| Où sont les tables | Fichiers, chiffrement, emplacement |
+| Erreurs | Ce que RsS signale, et où |
+| Référence | Tout RsS sur une page, et ce qu'il ne fait pas |

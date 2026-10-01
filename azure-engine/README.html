@@ -1,0 +1,855 @@
+<!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <title>Azure Engine &mdash; Technical Documentation</title>
+            <style>
+/* From extension vscode.github */
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+.vscode-dark img[src$=\#gh-light-mode-only],
+.vscode-light img[src$=\#gh-dark-mode-only],
+.vscode-high-contrast:not(.vscode-high-contrast-light) img[src$=\#gh-light-mode-only],
+.vscode-high-contrast-light img[src$=\#gh-dark-mode-only] {
+	display: none;
+}
+
+</style>
+            
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/Microsoft/vscode/extensions/markdown-language-features/media/markdown.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/Microsoft/vscode/extensions/markdown-language-features/media/highlight.css">
+<style>
+            body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe WPC', 'Segoe UI', system-ui, 'Ubuntu', 'Droid Sans', sans-serif;
+                font-size: 14px;
+                line-height: 1.6;
+            }
+        </style>
+        <style>
+.task-list-item {
+    list-style-type: none;
+}
+
+.task-list-item-checkbox {
+    margin-left: -20px;
+    vertical-align: middle;
+    pointer-events: none;
+}
+</style>
+<style>
+:root {
+  --color-note: #0969da;
+  --color-tip: #1a7f37;
+  --color-warning: #9a6700;
+  --color-severe: #bc4c00;
+  --color-caution: #d1242f;
+  --color-important: #8250df;
+}
+
+</style>
+<style>
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-note: #2f81f7;
+    --color-tip: #3fb950;
+    --color-warning: #d29922;
+    --color-severe: #db6d28;
+    --color-caution: #f85149;
+    --color-important: #a371f7;
+  }
+}
+
+</style>
+<style>
+.markdown-alert {
+  padding: 0.5rem 1rem;
+  margin-bottom: 16px;
+  color: inherit;
+  border-left: .25em solid #888;
+}
+
+.markdown-alert>:first-child {
+  margin-top: 0
+}
+
+.markdown-alert>:last-child {
+  margin-bottom: 0
+}
+
+.markdown-alert .markdown-alert-title {
+  display: flex;
+  font-weight: 500;
+  align-items: center;
+  line-height: 1
+}
+
+.markdown-alert .markdown-alert-title .octicon {
+  margin-right: 0.5rem;
+  display: inline-block;
+  overflow: visible !important;
+  vertical-align: text-bottom;
+  fill: currentColor;
+}
+
+.markdown-alert.markdown-alert-note {
+  border-left-color: var(--color-note);
+}
+
+.markdown-alert.markdown-alert-note .markdown-alert-title {
+  color: var(--color-note);
+}
+
+.markdown-alert.markdown-alert-important {
+  border-left-color: var(--color-important);
+}
+
+.markdown-alert.markdown-alert-important .markdown-alert-title {
+  color: var(--color-important);
+}
+
+.markdown-alert.markdown-alert-warning {
+  border-left-color: var(--color-warning);
+}
+
+.markdown-alert.markdown-alert-warning .markdown-alert-title {
+  color: var(--color-warning);
+}
+
+.markdown-alert.markdown-alert-tip {
+  border-left-color: var(--color-tip);
+}
+
+.markdown-alert.markdown-alert-tip .markdown-alert-title {
+  color: var(--color-tip);
+}
+
+.markdown-alert.markdown-alert-caution {
+  border-left-color: var(--color-caution);
+}
+
+.markdown-alert.markdown-alert-caution .markdown-alert-title {
+  color: var(--color-caution);
+}
+
+</style>
+        
+        </head>
+        <body class="vscode-body vscode-light">
+            <span id="markdown-mermaid" aria-hidden="true" data-config="{&quot;darkModeTheme&quot;:&quot;vscode&quot;,&quot;lightModeTheme&quot;:&quot;vscode&quot;,&quot;maxTextSize&quot;:50000,&quot;clickDrag&quot;:&quot;alt&quot;,&quot;showControls&quot;:&quot;onHoverOrFocus&quot;,&quot;resizable&quot;:true,&quot;maxHeight&quot;:&quot;&quot;}"></span>
+				<h1 id="azure-engine--technical-documentation">Azure Engine — Technical Documentation</h1>
+<p><strong>Version:</strong> V1.5
+<strong>Language:</strong> Rust (2024 edition)
+<strong>Platform:</strong> Linux (Wayland)
+<strong>Status:</strong> Active development — rendering module operational, variable-font text rendering operational</p>
+<hr>
+<h2 id="table-of-contents">Table of Contents</h2>
+<ol>
+<li><a href="#1-what-is-azure-engine">What is Azure Engine?</a></li>
+<li><a href="#2-where-it-fits-in-the-azure-ecosystem">Where it fits in the Azure ecosystem</a></li>
+<li><a href="#3-core-concepts-you-need-to-understand-first">Core concepts you need to understand first</a></li>
+<li><a href="#4-architecture-overview">Architecture overview</a></li>
+<li><a href="#5-project-structure">Project structure</a></li>
+<li><a href="#6-models--data-structures">Models — data structures</a></li>
+<li><a href="#7-managers--logic-and-operations">Managers — logic and operations</a></li>
+<li><a href="#8-rendering-module">Rendering module</a></li>
+<li><a href="#9-the-full-window-creation-sequence">The full window creation sequence</a></li>
+<li><a href="#10-dependencies">Dependencies</a></li>
+<li><a href="#11-variable-font-weight-support">Variable font weight support</a></li>
+<li><a href="#12-text-layout-correctness--baseline-side-bearings-minimum-spacing">Text layout correctness — baseline, side bearings, minimum spacing</a></li>
+<li><a href="#13-stem-darkening">Stem darkening</a></li>
+<li><a href="#14-rendering-correctness--bugs-found-and-fixed">Rendering correctness — bugs found and fixed</a></li>
+<li><a href="#15-hinting--what-it-is-and-why-were-not-implementing-it">Hinting — what it is, and why we're not implementing it</a></li>
+<li><a href="#16-test-suite-for-text-rendering">Test suite for text rendering</a></li>
+<li><a href="#17-current-capabilities-and-limitations">Current capabilities and limitations</a></li>
+<li><a href="#18-what-comes-next">What comes next</a></li>
+</ol>
+<hr>
+<h2 id="1-what-is-azure-engine">1. What is Azure Engine?</h2>
+<p>Azure Engine is the lowest-level runtime component of the Azure platform. Its single responsibility is to bridge the gap between Azure applications and the operating system's display infrastructure — in practical terms, it answers the question: <em>how does a Rust program get a visible, persistent, interactive window on screen, without using any UI framework?</em></p>
+<p>Every graphical application needs to go through a series of system-level steps before it can render anything: it must establish a communication channel with the display server, negotiate a memory region that both the app and the display server can access, declare the existence of a surface, confirm a configuration handshake, and then continuously process events to stay alive and responsive. Azure Engine handles all of these steps from scratch, speaking the raw binary Wayland protocol directly over a Unix socket.</p>
+<p>This is intentionally the hardest possible approach. No bindings library, no abstraction layer, no framework. Every byte sent to the compositor is constructed by hand, in the exact format defined by the Wayland protocol specification.</p>
+<hr>
+<h2 id="2-where-it-fits-in-the-azure-ecosystem">2. Where it fits in the Azure ecosystem</h2>
+<p>Azure is organized in five layers, from the most abstract to the most concrete:</p>
+<pre><code>┌─────────────────────────────────────┐
+│           Applications              │
+│   AzureWork · AzureMail · AzureDev  │
+├─────────────────────────────────────┤
+│         Azure Foundation            │
+│  Shared UI · Navigation · Manifests │
+├─────────────────────────────────────┤
+│           Azure Services            │
+│  Identity · Permissions · Search    │
+├─────────────────────────────────────┤
+│             Azure Core              │
+│  Contracts · Events · Registry      │
+├─────────────────────────────────────┤
+│             Azure Engine            │
+│  Wayland · Window · Input · Render  │
+└─────────────────────────────────────┘
+</code></pre>
+<p>Azure Engine sits at the very bottom of the stack. Azure Core defines the logical rules of the platform. Azure Engine makes it visible. Foundation and all applications depend only on the <code>AzureWindowProvider</code> trait defined in Core — never on Wayland-specific code directly.</p>
+<hr>
+<h2 id="3-core-concepts-you-need-to-understand-first">3. Core concepts you need to understand first</h2>
+<p>Before reading the code, three concepts are essential.</p>
+<p><strong>The compositor</strong> is the program responsible for managing all windows on screen. On a Linux desktop running GNOME, this is Mutter. It is an ordinary user-space process, but it holds a privilege that other programs do not: direct access to the screen hardware. Every application that wants to display something must go through the compositor. The compositor receives each app's content, composites everything together into one final image, and sends that image to the physical screen.</p>
+<p><strong>Wayland</strong> is the protocol that applications use to communicate with the compositor. It is a binary protocol exchanged over a Unix socket — a special file on disk (<code>/run/user/1000/wayland-0</code>) that acts as a bidirectional pipe between two processes. Every message has a fixed structure: a 4-byte object ID (who is this message addressed to), a 4-byte combined field (message size in the upper 16 bits, opcode in the lower 16 bits), and any number of 4-byte arguments. All integers are encoded in little-endian byte order.</p>
+<p><strong>Shared memory</strong> is the mechanism that lets an application's pixel data reach the compositor without being copied. The application allocates a region of memory using the <code>memfd_create</code> system call, fills it with pixel data, and then transmits the file descriptor (a number referencing that memory region) to the compositor using a special kernel mechanism called <code>SCM_RIGHTS</code>. Once the compositor receives this file descriptor, both processes point to the exact same physical RAM — there is no network transfer, no data copy, just two processes reading and writing the same bytes.</p>
+<p><strong>The pixel buffer</strong> is a flat 1D array of bytes in shared memory. Every pixel occupies exactly 4 bytes in BGRA order (Blue, Green, Red, Alpha) — this matches the <code>ARGB8888</code> format declared when the <code>wl_buffer</code> is created (<code>wl_shm.format</code> value <code>0</code>), which the Wayland spec defines as a 32-bit <code>0xAARRGGBB</code> value stored little-endian, i.e. bytes <code>[B, G, R, A]</code> in memory. The position of pixel <code>(x, y)</code> in this flat array is computed as <code>(y * width + x) * 4</code>. Wayland requires the <code>damage_buffer</code> call before each <code>commit</code> to signal which region of the buffer has changed.</p>
+<blockquote>
+<p><strong>Every pixel-writing function in the rendering module writes directly in this B, G, R, A byte order.</strong> There is no separate &quot;internal RGBA&quot; representation anywhere — see <a href="#146-red-and-blue-channels-swapped-everywhere">§14.6</a> for the history of why this matters and how it was verified.</p>
+</blockquote>
+<hr>
+<h2 id="4-architecture-overview">4. Architecture overview</h2>
+<p>The codebase follows a strict model/manager/service separation:</p>
+<p><strong>Models</strong> hold data. They are plain structs with constructors and getters, no business logic.</p>
+<p><strong>Managers</strong> hold logic. They are collections of free functions that operate on models and send/receive messages over the connection.</p>
+<p><strong>Services</strong> (in the rendering module) are isolated operations on the canvas — each shape, effect, or utility is a separate file.</p>
+<p>The <code>Window</code> struct is the central object exposed to the rest of the platform. It owns the <code>WaylandConnection</code>, all Wayland object ids, the pixel pointer, and the dimensions. It implements the <code>AzureWindowProvider</code> trait from Azure Core, making it usable by Foundation and applications without any Wayland-specific knowledge on their side.</p>
+<hr>
+<h2 id="5-project-structure">5. Project structure</h2>
+<pre><code>azure-engine/
+├── Cargo.toml
+├── README.md
+└── src/
+    ├── lib.rs
+    ├── Sora-VariableFont_wght.ttf
+    ├── Roboto-VariableFont_wdth,wght.ttf
+    ├── platform/
+    │   ├── mod.rs
+    │   └── wayland/
+    │       ├── mod.rs
+    │       ├── models/
+    │       │   ├── mod.rs
+    │       │   ├── connection.rs
+    │       │   ├── registry.rs
+    │       │   ├── shared_memory.rs
+    │       │   ├── window.rs
+    │       │   ├── screen_output.rs
+    │       │   └── object_id_allocator.rs
+    │       └── managers/
+    │           ├── mod.rs
+    │           ├── connection_manager.rs
+    │           ├── registry_manager.rs
+    │           ├── bind_manager.rs
+    │           ├── shared_memory_manager.rs
+    │           ├── shm_manager.rs
+    │           ├── compositor_manager.rs
+    │           ├── xdg_manager.rs
+    │           ├── surface_manager.rs
+    │           ├── output_manager.rs
+    │           └── window_manager.rs
+    └── rendering/
+        ├── mod.rs
+        ├── models/
+        │   ├── mod.rs
+        │   ├── color.rs
+        │   ├── pixel.rs
+        │   ├── canvas.rs
+        │   └── glyph.rs
+        ├── services/
+        │   ├── mod.rs
+        │   ├── buffer.rs
+        │   ├── effects.rs
+        │   ├── shapes/
+        │   │   ├── mod.rs
+        │   │   ├── rect.rs
+        │   │   ├── line.rs
+        │   │   └── circle.rs
+        │   └── text/
+        │       ├── mod.rs
+        │       ├── loader.rs
+        │       ├── glyph.rs
+        │       ├── renderer.rs
+        │       └── kerning.rs
+        └── managers/
+            ├── mod.rs
+            └── renderer.rs
+</code></pre>
+<p>Two font files now ship with the engine: <strong>Sora</strong> (<code>wght</code> axis 100–800, default 400) and <strong>Roboto</strong> (<code>wght</code> axis 100–900, <code>wdth</code> axis 75–100, default 100/400) — both variable fonts, used throughout the test suite to validate the text pipeline across different families and axis ranges.</p>
+<hr>
+<h2 id="6-models--data-structures">6. Models — data structures</h2>
+<h3 id="modelsconnectionrs--waylandconnection"><code>models/connection.rs</code> — <code>WaylandConnection</code></h3>
+<p>The low-level socket wrapper. Wraps a <code>UnixStream</code> and exposes four communication methods.</p>
+<p><strong>Fields:</strong></p>
+<ul>
+<li><code>stream: UnixStream</code> — the open socket connected to the Wayland compositor.</li>
+</ul>
+<p><strong>Methods:</strong></p>
+<p><code>new(stream: UnixStream) -&gt; WaylandConnection</code>
+Constructs a connection from an already-open stream.</p>
+<p><code>send(&amp;mut self, data: &amp;[u8]) -&gt; Result&lt;(), String&gt;</code>
+Sends a slice of bytes over the socket.</p>
+<p><code>send_with_fd(&amp;mut self, data: &amp;[u8], fd: RawFd) -&gt; Result&lt;(), String&gt;</code>
+Sends bytes alongside a file descriptor using <code>sendmsg</code> with <code>SCM_RIGHTS</code>.</p>
+<p><code>receive(&amp;mut self, buf: &amp;mut [u8]) -&gt; Result&lt;(), String&gt;</code>
+Reads exactly <code>buf.len()</code> bytes from the socket.</p>
+<p><code>set_nonblocking(&amp;self, nonblocking: bool) -&gt; Result&lt;(), String&gt;</code>
+Switches the socket between blocking and non-blocking mode.</p>
+<hr>
+<h3 id="modelsregistryrs--waylandglobal-and-waylandregistry"><code>models/registry.rs</code> — <code>WaylandGlobal</code> and <code>WaylandRegistry</code></h3>
+<p><strong><code>WaylandGlobal</code></strong> — a single service announced by the compositor.
+Fields: <code>name: String</code>, <code>version: u32</code>, <code>id: u32</code>.</p>
+<p><strong><code>WaylandRegistry</code></strong> — the complete list of services the compositor offers.
+Fields: <code>globals: Vec&lt;WaylandGlobal&gt;</code>.</p>
+<hr>
+<h3 id="modelsshared_memoryrs--waylandmemory"><code>models/shared_memory.rs</code> — <code>WaylandMemory</code></h3>
+<p>Fields: <code>fd: i32</code>, <code>size: usize</code>.</p>
+<hr>
+<h3 id="modelswindowrs--window"><code>models/window.rs</code> — <code>Window</code></h3>
+<p>The central platform object. Implements <code>AzureWindowProvider</code> from Azure Core.</p>
+<p><strong>Fields:</strong> <code>surface_id</code>, <code>buffer_id</code>, <code>pool_id</code>, <code>xdg_toplevel_id</code>, <code>xdg_wm_id</code>, <code>xdg_surface_id</code>, <code>width: i32</code>, <code>height: i32</code>, <code>ptr: *mut u8</code>, <code>connection: WaylandConnection</code>.</p>
+<p><strong><code>AzureWindowProvider</code> implementation:</strong></p>
+<ul>
+<li><code>render(pixels: &amp;[u8])</code> — copies pixel buffer into shared memory.</li>
+<li><code>poll_event() -&gt; Option&lt;WindowEvent&gt;</code> — non-blocking event polling.</li>
+</ul>
+<hr>
+<h3 id="modelsscreen_outputrs--screenoutput"><code>models/screen_output.rs</code> — <code>ScreenOutput</code></h3>
+<p>Holds the physical resolution of a <code>wl_output</code> (monitor) as reported by the compositor.</p>
+<pre><code class="language-rust"><span class="hljs-keyword">pub</span> <span class="hljs-keyword">struct</span> <span class="hljs-title class_">ScreenOutput</span> { <span class="hljs-keyword">pub</span> width: <span class="hljs-type">i32</span>, <span class="hljs-keyword">pub</span> height: <span class="hljs-type">i32</span> }
+</code></pre>
+<p><code>ScreenOutput::new(width, height) -&gt; ScreenOutput</code></p>
+<p>Populated by <code>output_manager::get_screen_resolution()</code> — see <a href="#managers-output_managerrs">§7</a>.</p>
+<hr>
+<h3 id="modelsobject_id_allocatorrs--objectidallocator"><code>models/object_id_allocator.rs</code> — <code>ObjectIdAllocator</code></h3>
+<p>Monotonic counter for Wayland object ids starting at <code>4</code>.</p>
+<hr>
+<h3 id="renderingmodelscolorrs--color"><code>rendering/models/color.rs</code> — <code>Color</code></h3>
+<pre><code class="language-rust"><span class="hljs-keyword">pub</span> <span class="hljs-keyword">struct</span> <span class="hljs-title class_">Color</span> { <span class="hljs-keyword">pub</span> r: <span class="hljs-type">u8</span>, <span class="hljs-keyword">pub</span> g: <span class="hljs-type">u8</span>, <span class="hljs-keyword">pub</span> b: <span class="hljs-type">u8</span>, <span class="hljs-keyword">pub</span> a: <span class="hljs-type">u8</span> }
+</code></pre>
+<p><code>Color::new(r, g, b, a) -&gt; Color</code></p>
+<p>Colors are always expressed in normal R, G, B, A order at the API level — callers never think about Wayland's byte order. The B/G/R reordering happens only at the three places that actually write into <code>canvas.buffer</code> (<code>set_pixel</code>, <code>blend_pixel</code>, <code>draw_glyph</code>'s blend step). See <a href="#146-red-and-blue-channels-swapped-everywhere">§14.6</a>.</p>
+<hr>
+<h3 id="renderingmodelspixelrs--pixel"><code>rendering/models/pixel.rs</code> — <code>Pixel</code></h3>
+<pre><code class="language-rust"><span class="hljs-keyword">pub</span> <span class="hljs-keyword">struct</span> <span class="hljs-title class_">Pixel</span> { <span class="hljs-keyword">pub</span> x: <span class="hljs-type">u32</span>, <span class="hljs-keyword">pub</span> y: <span class="hljs-type">u32</span>, <span class="hljs-keyword">pub</span> color: Color }
+</code></pre>
+<hr>
+<h3 id="renderingmodelscanvasrs--canvas"><code>rendering/models/canvas.rs</code> — <code>Canvas</code></h3>
+<pre><code class="language-rust"><span class="hljs-keyword">pub</span> <span class="hljs-keyword">struct</span> <span class="hljs-title class_">Canvas</span> { <span class="hljs-keyword">pub</span> width: <span class="hljs-type">u32</span>, <span class="hljs-keyword">pub</span> height: <span class="hljs-type">u32</span>, <span class="hljs-keyword">pub</span> buffer: <span class="hljs-type">Vec</span>&lt;<span class="hljs-type">u8</span>&gt; }
+</code></pre>
+<p><code>Canvas::new(width, height) -&gt; Canvas</code> — allocates <code>width * height * 4</code> bytes initialized to zero.</p>
+<hr>
+<h3 id="renderingmodelsglyphrs--glyph"><code>rendering/models/glyph.rs</code> — <code>Glyph</code></h3>
+<p>Holds a rasterized glyph's geometry after extraction from a TTF font.</p>
+<pre><code class="language-rust"><span class="hljs-keyword">pub</span> <span class="hljs-keyword">struct</span> <span class="hljs-title class_">Glyph</span> {
+    <span class="hljs-keyword">pub</span> width: <span class="hljs-type">f32</span>,
+    <span class="hljs-keyword">pub</span> height: <span class="hljs-type">f32</span>,
+    <span class="hljs-keyword">pub</span> advance_width: <span class="hljs-type">f32</span>,
+    <span class="hljs-keyword">pub</span> descent: <span class="hljs-type">f32</span>,
+    <span class="hljs-keyword">pub</span> lsb: <span class="hljs-type">f32</span>,
+    <span class="hljs-keyword">pub</span> contours: <span class="hljs-type">Vec</span>&lt;<span class="hljs-type">Vec</span>&lt;(<span class="hljs-type">f32</span>, <span class="hljs-type">f32</span>)&gt;&gt;,
+}
+</code></pre>
+<ul>
+<li><code>width</code> / <code>height</code> — ink bounding box in scaled pixels (<code>(bbox.x_max - bbox.x_min) * scale</code>, same for height).</li>
+<li><code>advance_width</code> — horizontal cursor advance after drawing this glyph (from the font's <code>hmtx</code>/<code>HVAR</code> data, already reflecting the current variable-font weight).</li>
+<li><code>descent</code> — how far the glyph's ink dips <strong>below</strong> the baseline (<code>y = 0</code> in font units). Zero for letters that sit on the baseline (<code>H</code>, <code>e</code>, <code>l</code>...), positive for descenders (<code>g</code>, <code>p</code>, <code>q</code>, <code>j</code>, <code>y</code>). Added so <code>draw_text</code> can align every glyph on one shared baseline instead of aligning their bounding boxes, which used to pull descenders up to the same line as everything else. See <a href="#143-descenders-not-hanging-below-the-baseline">§14.3</a>.</li>
+<li><code>lsb</code> — left side bearing: the gap between the pen position and where the ink actually starts. Added because the contours are normalized to start at local <code>x = 0</code>, which silently threw away each glyph's natural left margin and made spacing look uneven. See <a href="#144-left-side-bearing-collapsed-to-zero">§14.4</a>.</li>
+<li><code>contours</code> — the outline as a list of closed polygons, each a list of <code>(x, y)</code> points in <code>[0, width] × [0, height]</code> space (origin at bottom-left, matching font coordinate conventions). <strong>Contours from the same glyph can legitimately overlap</strong> (e.g. the crossbar and stem of a <code>t</code>) — this is why the rasterizer uses a nonzero-winding fill rather than even-odd; see <a href="#141-holes-at-stroke-junctions-even-odd-vs-nonzero-winding">§14.1</a>.</li>
+</ul>
+<hr>
+<h2 id="7-managers--logic-and-operations">7. Managers — logic and operations</h2>
+<h3 id="managersconnection_managerrs"><code>managers/connection_manager.rs</code></h3>
+<p><code>connect() -&gt; Result&lt;WaylandConnection, String&gt;</code> — opens the Wayland socket.</p>
+<h3 id="managersregistry_managerrs"><code>managers/registry_manager.rs</code></h3>
+<ul>
+<li><code>get_registry(connection) -&gt; Result&lt;WaylandRegistry, String&gt;</code></li>
+<li><code>find_global(registry, interface) -&gt; Option&lt;u32&gt;</code></li>
+</ul>
+<h3 id="managersbind_managerrs"><code>managers/bind_manager.rs</code></h3>
+<p><code>bind_global(connection, name, interface, version, new_id) -&gt; Result&lt;u32, String&gt;</code></p>
+<h3 id="managersshared_memory_managerrs"><code>managers/shared_memory_manager.rs</code></h3>
+<ul>
+<li><code>create_shared_memory(size) -&gt; Result&lt;WaylandMemory, String&gt;</code></li>
+<li><code>map_memory(memory) -&gt; Result&lt;*mut u8, String&gt;</code></li>
+<li><code>unmap_memory(ptr, size) -&gt; Result&lt;(), String&gt;</code></li>
+</ul>
+<h3 id="managersshm_managerrs"><code>managers/shm_manager.rs</code></h3>
+<ul>
+<li><code>create_shm_pool(connection, fd, size) -&gt; Result&lt;u32, String&gt;</code></li>
+<li><code>create_buffer(connection, pool_id, width, height) -&gt; Result&lt;u32, String&gt;</code> — declares the <code>wl_buffer</code> with format <code>ARGB8888</code> (code <code>0</code>) and stride <code>width * 4</code>. This format choice is what dictates the B,G,R,A memory layout described in <a href="#3-core-concepts-you-need-to-understand-first">§3</a> — <code>ARGB8888</code>/<code>XRGB8888</code> are the only two formats every Wayland compositor is required to support, so the engine targets <code>ARGB8888</code> rather than a format that would match a more &quot;natural&quot; R,G,B,A layout.</li>
+</ul>
+<h3 id="managerscompositor_managerrs"><code>managers/compositor_manager.rs</code></h3>
+<p><code>create_surface(connection, compositor_id) -&gt; Result&lt;u32, String&gt;</code></p>
+<h3 id="managersxdg_managerrs"><code>managers/xdg_manager.rs</code></h3>
+<ul>
+<li><code>get_xdg_surface(connection, xdg_wm_base_id, surface_id) -&gt; Result&lt;u32, String&gt;</code></li>
+<li><code>get_toplevel(connection, xdg_surface_id) -&gt; Result&lt;u32, String&gt;</code></li>
+<li><code>ack_configure(connection, xdg_surface_id, serial) -&gt; Result&lt;(), String&gt;</code></li>
+<li><code>attach(connection, surface_id, buffer_id) -&gt; Result&lt;(), String&gt;</code></li>
+<li><code>set_title(connection, toplevel_id, title: &amp;str) -&gt; Result&lt;(), String&gt;</code> — sends <code>xdg_toplevel.set_title</code>. Encodes the title as a length-prefixed, null-terminated, 4-byte-padded string per the Wayland wire format.</li>
+</ul>
+<h3 id="managerssurface_managerrs"><code>managers/surface_manager.rs</code></h3>
+<ul>
+<li><code>commit(connection, surface_id) -&gt; Result&lt;(), String&gt;</code></li>
+<li><code>damage_buffer(connection, surface_id, x, y, width, height) -&gt; Result&lt;(), String&gt;</code> — signals to Wayland which region has changed. Must be called before every <code>commit</code> after drawing.</li>
+<li><code>wait_for_configure(connection, xdg_surface_id) -&gt; Result&lt;u32, String&gt;</code></li>
+<li><code>run_event_loop(window, xdg_surface_id, xdg_toplevel_id, surface_id, xdg_wm_base_id) -&gt; Result&lt;(), String&gt;</code></li>
+</ul>
+<h3 id="managersoutput_managerrs"><code>managers/output_manager.rs</code></h3>
+<p><code>get_screen_resolution() -&gt; Result&lt;ScreenOutput, String&gt;</code>
+Opens its own short-lived connection, binds <code>wl_output</code>, and listens for the <code>geometry</code>/<code>mode</code> event (opcode <code>1</code>) to read the monitor's physical <code>width</code>/<code>height</code>, returned as a <code>ScreenOutput</code>.</p>
+<h3 id="managerswindow_managerrs"><code>managers/window_manager.rs</code></h3>
+<p><code>window_create(width, height) -&gt; Result&lt;Window, String&gt;</code> — full creation sequence.</p>
+<hr>
+<h2 id="8-rendering-module">8. Rendering module</h2>
+<p>The rendering module is a CPU-based software renderer operating on a flat pixel buffer. It is entirely independent of Wayland — it writes to a <code>Canvas</code> in memory, and the caller copies the canvas to the window's shared memory before committing.</p>
+<h3 id="the-rendering-pipeline">The rendering pipeline</h3>
+<pre><code>draw_*(canvas)           → writes pixels into canvas.buffer
+copy_nonoverlapping()    → copies canvas.buffer into window.ptr()
+damage_buffer()          → marks the region as changed
+attach() + commit()      → Wayland displays the result
+</code></pre>
+<h3 id="pixel-addressing">Pixel addressing</h3>
+<p>Every pixel is addressed by the formula <code>(y * width + x) * 4</code>. Every function that writes into <code>canvas.buffer</code> writes those 4 bytes directly in <strong>B, G, R, A</strong> order — the order Wayland's <code>ARGB8888</code> buffer format expects in memory (see <a href="#3-core-concepts-you-need-to-understand-first">§3</a> and <a href="#146-red-and-blue-channels-swapped-everywhere">§14.6</a>). There is no intermediate RGBA representation anywhere in the canvas; callers just pass normal <code>Color { r, g, b, a }</code> values and the reordering happens inline at each write site.</p>
+<hr>
+<h3 id="renderingservicesbufferrs"><code>rendering/services/buffer.rs</code></h3>
+<p><strong><code>get_pixel_index(x, y, width) -&gt; usize</code></strong>
+Returns the byte offset of pixel <code>(x, y)</code> in the flat buffer.</p>
+<p><strong><code>set_pixel(buffer, x, y, width, height, color)</code></strong>
+Writes <code>[color.b, color.g, color.r, color.a]</code> at the correct offset. Bounds-checked — silently ignores out-of-bounds writes.</p>
+<hr>
+<h3 id="renderingservicesshapes"><code>rendering/services/shapes/</code></h3>
+<p><strong><code>rect.rs</code></strong></p>
+<p><code>draw_rect(x, y, width, height, color, canvas)</code>
+Fills a solid rectangle by iterating over all pixels in the bounding box.</p>
+<p><code>draw_rect_rounded(x, y, width, height, radius, color, canvas)</code>
+Rectangle with rounded corners. Composed of three filled rects and four <code>draw_circle_filled</code> calls at the corners.</p>
+<hr>
+<p><strong><code>line.rs</code></strong></p>
+<p><code>draw_line_horizontal(x, x_end, y, color, canvas)</code>
+Horizontal line from <code>x</code> to <code>x_end</code> at fixed <code>y</code>.</p>
+<p><code>draw_line_vertical(y, y_end, x, color, canvas)</code>
+Vertical line from <code>y</code> to <code>y_end</code> at fixed <code>x</code>.</p>
+<p><code>draw_line(x, y, x_end, y_end, color, canvas)</code>
+General line via a signed-distance-field approach with <code>apply_aa</code>, blended with <code>blend_pixel</code>. Handles all angles and directions. Uses <code>i32</code> coordinates to support all four directional combinations.</p>
+<hr>
+<p><strong><code>circle.rs</code></strong></p>
+<p><code>draw_circle(cx, cy, radius, color, canvas)</code>
+Circle outline via a signed-distance-field approach (<code>apply_aa</code> on <code>|distance to radius| - 0.5</code>), blended with <code>blend_pixel</code> for antialiased edges.</p>
+<p><code>draw_circle_filled(cx, cy, radius, color, canvas)</code>
+Filled circle using the same distance-field technique, filling every pixel whose distance to the center is within the radius.</p>
+<hr>
+<h3 id="renderingserviceseffectsrs"><code>rendering/services/effects.rs</code></h3>
+<p><strong><code>blend_pixel(buffer, x, y, width, height, color)</code></strong>
+Composites a semi-transparent color over the existing pixel using the standard Porter-Duff <code>over</code> formula in sRGB space. Reads the background as <code>[bg_b, bg_g, bg_r, _]</code> (matching the B,G,R,A buffer layout), blends each channel, and writes back in the same order.</p>
+<p><strong><code>draw_gradient_horizontal(x, y, width, height, color_start, color_end, canvas)</code></strong>
+Fills a rectangle with a left-to-right linear gradient between two colors.</p>
+<p><strong><code>draw_vertical_gradient(x, y, width, height, color_start, color_end, canvas)</code></strong>
+Fills a rectangle with a top-to-bottom linear gradient between two colors.</p>
+<p><strong><code>draw_angular_gradiant(x, y, width, height, angle, color_start, color_end, canvas)</code></strong>
+Fills a rectangle with a gradient along an arbitrary angle in degrees.</p>
+<p><strong><code>apply_aa(distance) -&gt; u8</code></strong>
+Returns an alpha value in <code>[0, 255]</code> for a signed distance field input. Used for smooth circle and line edges.</p>
+<hr>
+<h3 id="renderingservicestext"><code>rendering/services/text/</code></h3>
+<p>The text subsystem loads TTF/OTF fonts (including <strong>variable fonts</strong>), extracts glyph outlines at a given size and weight, and rasterizes them with high-quality anti-aliasing. It is entirely CPU-based and depends only on <code>ttf-parser</code> for outline and variation data.</p>
+<hr>
+<p><strong><code>text/loader.rs</code></strong></p>
+<p><code>load_font(path: &amp;str) -&gt; Result&lt;Vec&lt;u8&gt;, String&gt;</code>
+Reads a TTF/OTF font file from disk into a byte buffer. The buffer is passed by reference to all subsequent glyph operations. Note: <code>draw_text</code> currently calls this (and re-parses the face) once per character — see <a href="#17-current-capabilities-and-limitations">§17</a> for the performance implication.</p>
+<hr>
+<p><strong><code>text/glyph.rs</code></strong></p>
+<p><code>exctract_glyph(font_data: &amp;[u8], character: char, size: f32, weight: f32) -&gt; Result&lt;Glyph, String&gt;</code></p>
+<p>Extracts a single character's outline from the font, at a given point size and a given position on the font's <code>wght</code> variation axis, and returns a <code>Glyph</code> ready for rasterization.</p>
+<p><strong>Pipeline:</strong></p>
+<ol>
+<li>Parse the font face with <code>ttf_parser::Face::parse</code> (mutable — variable fonts need a mutable face to set variation coordinates).</li>
+<li>Apply the requested weight: <code>face.set_variation(Tag::from_bytes(b&quot;wght&quot;), weight)</code>. <code>ttf_parser</code> clamps out-of-range values to the font's actual axis min/max automatically, and applies any <code>avar</code> axis remapping the font defines. See <a href="#11-variable-font-weight-support">§11</a> for how to discover a font's real axis range.</li>
+<li>Look up the glyph id for <code>character</code>.</li>
+<li>Walk the TTF outline commands (<code>move_to</code>, <code>line_to</code>, <code>quad_to</code>, <code>curve_to</code>, <code>close</code>) using a custom <code>OutlineBuilder</code>. Because the face already has the weight variation applied, the outline returned here is the <em>interpolated</em> (already-bold-or-thin) shape — <code>gvar</code> deltas are applied by <code>ttf_parser</code> transparently.</li>
+<li>Bezier curves are flattened via <strong>recursive De Casteljau subdivision</strong> with a flatness threshold of <code>0.5</code> font units — curves split until the maximum deviation of any control point from the chord is below this threshold (capped at 8 levels of recursion). This threshold is applied in raw font-design units (typically 0–1000 or 0–2048 per em), i.e. long before the final pixel scale is known, so in practice it always produces far more segments than a small on-screen glyph needs — safe, but not the most efficient possible choice.</li>
+<li>Compute <code>width</code>, <code>height</code>, <code>advance_width</code> (from <code>glyph_hor_advance</code>, which reflects <code>HVAR</code> deltas for the current weight), <code>descent</code> (from <code>-bbox.y_min</code>, clamped to ≥ 0), and <code>lsb</code> (from <code>bbox.x_min</code>), all scaled by <code>size / units_per_em</code>.</li>
+<li>Contour points are scaled and shifted so the origin sits at the glyph's own ink bounding-box minimum — i.e. contour space is <code>[0, width] × [0, height]</code>, <strong>not</strong> aligned to the font's baseline. The baseline offset is carried separately via <code>descent</code>/<code>lsb</code> so <code>draw_text</code> can position each glyph correctly relative to a shared baseline (see <a href="#12-text-layout-correctness--baseline-side-bearings-minimum-spacing">§12</a>) without needing to touch the contour data itself.</li>
+</ol>
+<hr>
+<p><strong><code>text/renderer.rs</code></strong></p>
+<p><code>draw_glyph(glyph: &amp;Glyph, x: u32, y: u32, color: &amp;Color, canvas: &amp;mut Canvas)</code></p>
+<p>Rasterizes a <code>Glyph</code> onto the canvas at pixel position <code>(x, y)</code> (the glyph's own local origin, <strong>not</strong> the baseline — the caller is responsible for baseline math, see §12) using a high-quality scanline algorithm.</p>
+<p><strong>Algorithm:</strong></p>
+<ol>
+<li>Coverage buffer width is <code>width.ceil() + 1</code> and height is <code>height.ceil()</code> (both computed with <code>.max(1)</code>) — the <code>+1</code> on width reserves room for the antialiased edge column at the right side of the glyph. This matters for anyone computing a glyph's rightmost drawn pixel externally (see <a href="#145-off-by-one-in-the-minimum-gap-calculation">§14.5</a>).</li>
+<li>For each pixel row <code>py</code> (0 to <code>height</code>):
+<ul>
+<li>Cast <strong>8 vertical sub-scanlines</strong> at positions <code>py + (s + 0.5) / 8</code> for <code>s</code> in <code>0..8</code>.</li>
+<li>For each sub-scanline, find all x-intersections with the glyph contour edges using the standard half-open interval rule (avoids double-counting shared vertices). Each intersection records a <strong>winding direction</strong> (<code>+1</code> or <code>-1</code>) based on whether the edge crosses upward or downward through the scanline.</li>
+<li>Sort intersections by x and walk them left to right, maintaining a running winding-number total. A span between two consecutive intersections is filled <strong>only while the running total is nonzero</strong> — this is the nonzero-winding rule, not even-odd (see <a href="#141-holes-at-stroke-junctions-even-odd-vs-nonzero-winding">§14.1</a> for why).</li>
+<li>For each pixel column within a filled span, accumulate the <strong>exact fractional horizontal coverage</strong> of <code>[px, px+1]</code> that falls inside the span.</li>
+</ul>
+</li>
+<li>Normalize accumulated coverage across 8 sub-scanlines to get a value in <code>[0, 1]</code>.</li>
+<li>Apply <strong>stem darkening</strong>: raise the coverage to the power <code>STEM_DARKEN_GAMMA</code> (<code>0.7</code>) before using it as alpha, boosting faint low-coverage pixels (thin strokes at small sizes) without touching fully-covered or fully-empty pixels. See <a href="#13-stem-darkening">§13</a>.</li>
+<li>Multiply by the color's own alpha channel.</li>
+<li><strong>Blend in linear light:</strong> convert the foreground color and background pixel from sRGB to linear (reading the background as <code>[buf[idx], buf[idx+1], buf[idx+2]] = [B, G, R]</code>, matching the canvas's byte order), apply the Porter-Duff <code>over</code> operator, convert back to sRGB, and write back in <code>[B, G, R, A]</code> order.</li>
+</ol>
+<p>The gamma-correct blend step is the most visually significant baseline decision: blending in perceptually-encoded sRGB space produces edges that are too dark at mid-coverage. Blending in linear space gives edges the correct physical weight — identical in spirit to what FreeType and all modern text engines produce.</p>
+<hr>
+<p><strong><code>text/kerning.rs</code></strong></p>
+<p><code>get_advance(glyph: &amp;Glyph) -&gt; f32</code>
+Returns the horizontal advance width of a glyph (cursor movement after drawing). Despite the file name, this does not currently implement pair kerning (GPOS/kern-table lookups) — it's a thin wrapper around <code>glyph.advance_width</code>, which already reflects the current variable-font weight via <code>HVAR</code>.</p>
+<hr>
+<h3 id="renderingmanagersrendererrs"><code>rendering/managers/renderer.rs</code></h3>
+<p>The public API of the rendering module.</p>
+<p><code>draw_rect(x, y, width, height, color, canvas)</code>
+Delegates to <code>shapes::rect::draw_rect</code>.</p>
+<p><code>draw_text(text: &amp;str, font_path: &amp;str, x: u32, y: u32, size: f32, weight: f32, color: &amp;Color, canvas: &amp;mut Canvas) -&gt; Result&lt;(), String&gt;</code></p>
+<p>Draws a string of characters at position <code>(x, y)</code> in the given font, point size, and position on the <code>wght</code> axis. For each character:</p>
+<ol>
+<li>Extracts the glyph at <code>(size, weight)</code>.</li>
+<li>Computes <code>glyph_x</code> from the running cursor plus the glyph's own <code>lsb</code>, then enforces a minimum real pixel gap against the previous glyph's actual rightmost painted column (<code>MIN_PIXEL_GAP = 1</code>) — see <a href="#123-minimum-pixel-gap-enforcement">§12.3</a>.</li>
+<li>Computes <code>glyph_y</code> from <code>y + size - glyph.height + glyph.descent</code>, so every glyph shares one baseline and descenders hang below it — see <a href="#121-shared-baseline">§12.1</a>.</li>
+<li>Calls <code>draw_glyph</code>, then advances the cursor by the glyph's <code>advance_width</code>.</li>
+</ol>
+<p>See <a href="#12-text-layout-correctness--baseline-side-bearings-minimum-spacing">§12</a> for the full rationale behind each of these steps — they were not all present in earlier versions of this function, and each one fixes a specific, visually-confirmed bug (documented in <a href="#14-rendering-correctness--bugs-found-and-fixed">§14</a>).</p>
+<hr>
+<h3 id="correct-rendering-sequence-from-tests">Correct rendering sequence (from tests)</h3>
+<pre><code class="language-rust"><span class="hljs-keyword">let</span> <span class="hljs-keyword">mut </span><span class="hljs-variable">canvas</span> = Canvas::<span class="hljs-title function_ invoke__">new</span>(<span class="hljs-number">800</span>, <span class="hljs-number">800</span>);
+<span class="hljs-keyword">let</span> <span class="hljs-variable">red</span> = Color::<span class="hljs-title function_ invoke__">new</span>(<span class="hljs-number">255</span>, <span class="hljs-number">0</span>, <span class="hljs-number">0</span>, <span class="hljs-number">255</span>);
+<span class="hljs-keyword">let</span> <span class="hljs-variable">blue</span> = Color::<span class="hljs-title function_ invoke__">new</span>(<span class="hljs-number">0</span>, <span class="hljs-number">0</span>, <span class="hljs-number">255</span>, <span class="hljs-number">255</span>);
+
+<span class="hljs-title function_ invoke__">draw_rect</span>(<span class="hljs-number">20</span>, <span class="hljs-number">50</span>, <span class="hljs-number">160</span>, <span class="hljs-number">120</span>, &amp;red, &amp;<span class="hljs-keyword">mut</span> canvas);
+<span class="hljs-title function_ invoke__">draw_circle</span>(<span class="hljs-number">520</span>, <span class="hljs-number">110</span>, <span class="hljs-number">60</span>, &amp;red, &amp;<span class="hljs-keyword">mut</span> canvas);
+<span class="hljs-title function_ invoke__">draw_gradient_horizontal</span>(<span class="hljs-number">220</span>, <span class="hljs-number">430</span>, <span class="hljs-number">180</span>, <span class="hljs-number">100</span>, &amp;red, &amp;blue, &amp;<span class="hljs-keyword">mut</span> canvas);
+<span class="hljs-title function_ invoke__">draw_text</span>(<span class="hljs-string">&quot;Hello&quot;</span>, <span class="hljs-string">&quot;src/Sora-VariableFont_wght.ttf&quot;</span>, <span class="hljs-number">100</span>, <span class="hljs-number">700</span>, <span class="hljs-number">32.0</span>, <span class="hljs-number">400.0</span>, &amp;red, &amp;<span class="hljs-keyword">mut</span> canvas)?;
+
+<span class="hljs-keyword">unsafe</span> {
+    std::ptr::<span class="hljs-title function_ invoke__">copy_nonoverlapping</span>(
+        canvas.buffer.<span class="hljs-title function_ invoke__">as_ptr</span>(),
+        window.<span class="hljs-title function_ invoke__">ptr</span>(),
+        canvas.buffer.<span class="hljs-title function_ invoke__">len</span>(),
+    );
+}
+
+<span class="hljs-title function_ invoke__">attach</span>(window.<span class="hljs-title function_ invoke__">connection_mut</span>(), surface_id, buffer_id)?;
+<span class="hljs-title function_ invoke__">damage_buffer</span>(window.<span class="hljs-title function_ invoke__">connection_mut</span>(), surface_id, <span class="hljs-number">0</span>, <span class="hljs-number">0</span>, width, height)?;
+<span class="hljs-title function_ invoke__">commit</span>(window.<span class="hljs-title function_ invoke__">connection_mut</span>(), surface_id)?;
+<span class="hljs-title function_ invoke__">run_event_loop</span>(&amp;<span class="hljs-keyword">mut</span> window, ...)?;
+</code></pre>
+<p>Note the extra <code>weight</code> argument (<code>400.0</code> above = Regular) compared to earlier versions of this README — see <a href="#11-variable-font-weight-support">§11</a>.</p>
+<hr>
+<h2 id="9-the-full-window-creation-sequence">9. The full window creation sequence</h2>
+<pre><code>connect()                              → opens Unix socket to compositor
+get_registry()                         → discovers all available services
+find_global(&quot;wl_shm/compositor/xdg&quot;)  → gets dynamic numeric ids
+bind_global(&quot;wl_shm&quot;, 4)              → activates shm service
+create_shared_memory(w*h*4)           → allocates RAM via memfd_create + ftruncate
+map_memory(fd)                         → maps RAM into process address space
+create_shm_pool(fd, size)             → tells compositor to use our RAM
+create_buffer(pool, width, height)    → declares a displayable image (format ARGB8888)
+bind_global(&quot;wl_compositor&quot;, 7)       → activates compositor service
+create_surface(compositor)            → creates blank drawing surface
+bind_global(&quot;xdg_wm_base&quot;, 9)        → activates shell service
+get_xdg_surface(xdg_wm_base, surf)   → promotes surface to shell management
+get_toplevel(xdg_surface)             → declares it a top-level window
+commit(surface)                        → triggers configure event from compositor
+wait_for_configure(xdg_surface)       → waits for compositor approval
+ack_configure(xdg_surface, serial)    → confirms the configuration
+damage_buffer(surface, 0, 0, w, h)   → marks full buffer as changed
+attach(surface, buffer)               → links pixel data to the surface
+commit(surface)                        → displays the window on screen
+
+→ caller draws into a Canvas, copies to window.ptr(), then attach+damage+commit
+→ caller invokes run_event_loop() to keep window alive
+→ caller invokes unmap_memory() after the loop exits
+</code></pre>
+<hr>
+<h2 id="10-dependencies">10. Dependencies</h2>
+<pre><code class="language-toml"><span class="hljs-section">[dependencies]</span>
+<span class="hljs-attr">libc</span> = <span class="hljs-string">&quot;0.2&quot;</span>
+<span class="hljs-attr">ttf-parser</span> = <span class="hljs-string">&quot;0.21&quot;</span>
+<span class="hljs-attr">azure-core</span> = { path = <span class="hljs-string">&quot;../azure-core&quot;</span> }
+</code></pre>
+<table>
+<thead>
+<tr>
+<th>Dependency</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>libc</code></td>
+<td><code>memfd_create</code>, <code>ftruncate</code>, <code>mmap</code>, <code>munmap</code>, <code>sendmsg</code>, <code>CMSG_*</code>, <code>SCM_RIGHTS</code></td>
+</tr>
+<tr>
+<td><code>ttf-parser</code></td>
+<td>TTF/OTF font parsing — glyph outline extraction, bounding boxes, advance widths, <strong>and variable-font axis/variation support</strong> (<code>variable-fonts</code> cargo feature, enabled by default)</td>
+</tr>
+<tr>
+<td><code>azure-core</code></td>
+<td><code>AzureWindowProvider</code> trait and <code>WindowEvent</code> enum</td>
+</tr>
+</tbody>
+</table>
+<p>No dependency was added to support variable-font weight — <code>ttf-parser</code> already covered it (<code>Face::set_variation</code>, <code>Face::variation_axes</code>). See <a href="#11-variable-font-weight-support">§11</a>.</p>
+<hr>
+<h2 id="11-variable-font-weight-support">11. Variable font weight support</h2>
+<p>Both fonts shipped with the engine (<code>Sora-VariableFont_wght.ttf</code>, <code>Roboto-VariableFont_wdth,wght.ttf</code>) are <strong>variable fonts</strong>: a single font file that can interpolate between multiple weights (and, for Roboto, widths) instead of shipping one file per style.</p>
+<p><code>draw_text</code> and <code>exctract_glyph</code> both take a <code>weight: f32</code> parameter on the standard CSS-style scale (<code>100</code> = Thin ... <code>400</code> = Regular ... <code>700</code> = Bold ... <code>900</code> = Black), applied via:</p>
+<pre><code class="language-rust">face.<span class="hljs-title function_ invoke__">set_variation</span>(ttf_parser::Tag::<span class="hljs-title function_ invoke__">from_bytes</span>(<span class="hljs-string">b&quot;wght&quot;</span>), weight);
+</code></pre>
+<p><code>ttf_parser</code> clamps out-of-range values to the font's actual axis bounds and applies the font's <code>avar</code> table if present, so passing an out-of-range weight is safe but not necessarily meaningful — always check a font's real range before relying on a specific value:</p>
+<pre><code class="language-rust"><span class="hljs-keyword">let</span> <span class="hljs-variable">face</span> = ttf_parser::Face::<span class="hljs-title function_ invoke__">parse</span>(&amp;font_data, <span class="hljs-number">0</span>)?;
+<span class="hljs-keyword">for</span> <span class="hljs-variable">axis</span> <span class="hljs-keyword">in</span> face.<span class="hljs-title function_ invoke__">variation_axes</span>() {
+    <span class="hljs-built_in">println!</span>(<span class="hljs-string">&quot;{:?} min={} default={} max={}&quot;</span>,
+        axis.tag.<span class="hljs-title function_ invoke__">to_bytes</span>(), axis.min_value, axis.def_value, axis.max_value);
+}
+</code></pre>
+<p>Measured axis ranges for the two shipped fonts:</p>
+<table>
+<thead>
+<tr>
+<th>Font</th>
+<th>Axis</th>
+<th>Min</th>
+<th>Default</th>
+<th>Max</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Sora</td>
+<td><code>wght</code></td>
+<td>100</td>
+<td>400</td>
+<td><strong>800</strong> (not 900 — no true Black instance)</td>
+</tr>
+<tr>
+<td>Roboto</td>
+<td><code>wght</code></td>
+<td>100</td>
+<td>400</td>
+<td>900</td>
+</tr>
+<tr>
+<td>Roboto</td>
+<td><code>wdth</code></td>
+<td>75</td>
+<td>100</td>
+<td>100 (not currently exposed by <code>draw_text</code> — width axis is left at its default)</td>
+</tr>
+</tbody>
+</table>
+<p>Weight changes affect more than stroke thickness: <code>HVAR</code>-driven advance widths and side bearings change too (heavier weights get proportionally <em>less</em> extra spacing relative to their ink width, not more) — this interacts directly with the minimum-gap logic described in <a href="#123-minimum-pixel-gap-enforcement">§12.3</a>.</p>
+<hr>
+<h2 id="12-text-layout-correctness--baseline-side-bearings-minimum-spacing">12. Text layout correctness — baseline, side bearings, minimum spacing</h2>
+<p>Three separate, independently-discovered layout bugs were fixed in <code>draw_text</code>; together they form the current positioning logic. Each is described in isolation here; the concrete before/after symptoms are in <a href="#14-rendering-correctness--bugs-found-and-fixed">§14</a>.</p>
+<h3 id="121-shared-baseline">12.1 Shared baseline</h3>
+<p>Every glyph in a run of text must sit on the same <strong>baseline</strong> — the invisible line that letters like <code>H</code>, <code>e</code>, <code>l</code>, <code>o</code> rest on, and that descenders (<code>g</code>, <code>p</code>, <code>q</code>, <code>j</code>, <code>y</code>) hang below. <code>Glyph</code> doesn't store an absolute baseline position (its contours are normalized to its own ink bounding box, <code>[0, width] × [0, height]</code>), so <code>draw_text</code> reconstructs it per glyph:</p>
+<pre><code class="language-rust"><span class="hljs-keyword">let</span> <span class="hljs-variable">glyph_y</span> = (y <span class="hljs-keyword">as</span> <span class="hljs-type">f32</span> + size - glyph.height + glyph.descent).<span class="hljs-title function_ invoke__">round</span>() <span class="hljs-keyword">as</span> <span class="hljs-type">u32</span>;
+</code></pre>
+<p><code>y + size</code> approximates the shared baseline row for the whole call; subtracting <code>glyph.height</code> moves up to the top of this specific glyph's ink; adding back <code>glyph.descent</code> lets glyphs whose ink dips below the baseline (a nonzero <code>descent</code>) sit that much lower than glyphs that don't. The whole expression is evaluated in <code>f32</code> and rounded exactly once, rather than rounding <code>size</code> and <code>glyph.height</code> independently and subtracting the rounded integers — the latter introduced up to ~1px of per-glyph jitter that read as visually inconsistent letter sizes across a word (see <a href="#143-descenders-not-hanging-below-the-baseline">§14.3</a>).</p>
+<h3 id="122-left-side-bearing-lsb">12.2 Left side bearing (LSB)</h3>
+<p>A glyph's contours are normalized so its ink starts at local <code>x = 0</code> — convenient for rasterization, but it throws away the glyph's natural left margin (<code>lsb</code>, stored separately on <code>Glyph</code>). <code>draw_text</code> adds it back in when positioning:</p>
+<pre><code class="language-rust"><span class="hljs-keyword">let</span> <span class="hljs-variable">glyph_x</span> = (cursor_x + glyph.lsb).<span class="hljs-title function_ invoke__">round</span>() <span class="hljs-keyword">as</span> <span class="hljs-type">i64</span>;
+</code></pre>
+<p>Without this, every glyph is drawn flush against the pen position regardless of its own design margin, and the cursor still advances by the <em>full</em> <code>advance_width</code> — so different glyphs (which have different natural <code>lsb</code>) end up visually squeezed together by inconsistent amounts. See <a href="#144-left-side-bearing-collapsed-to-zero">§14.4</a>.</p>
+<h3 id="123-minimum-pixel-gap-enforcement">12.3 Minimum pixel gap enforcement</h3>
+<p>Even with (12.1) and (12.2) correct, two glyphs can still end up touching on screen. The font's own side bearing is a <em>float</em> value; once both glyphs' positions are independently rounded to integer pixels for rasterization, a small-but-positive float gap (e.g. <code>0.4px</code>) can round away to <code>0</code> real pixels of separation — worst at small sizes and heavy weights, where the font's own bearing is already thin relative to the pixel grid (see <a href="#11-variable-font-weight-support">§11</a>).</p>
+<p>The fix tracks, per glyph, the <strong>actual rightmost pixel column <code>draw_glyph</code> can paint</strong> (not just the theoretical bearing), and pushes the next glyph's position forward if it would land closer than <code>MIN_PIXEL_GAP</code> (currently <code>1</code>) real pixels away:</p>
+<pre><code class="language-rust"><span class="hljs-keyword">const</span> MIN_PIXEL_GAP: <span class="hljs-type">i64</span> = <span class="hljs-number">1</span>;
+<span class="hljs-comment">// ...</span>
+<span class="hljs-keyword">if</span> <span class="hljs-keyword">let</span> <span class="hljs-variable">Some</span>(prev_edge) = prev_right_edge {
+    <span class="hljs-keyword">let</span> <span class="hljs-variable">min_x</span> = prev_edge + MIN_PIXEL_GAP;
+    <span class="hljs-keyword">if</span> glyph_x &lt; min_x {
+        cursor_x += (min_x - glyph_x) <span class="hljs-keyword">as</span> <span class="hljs-type">f32</span>;
+        glyph_x = min_x;
+    }
+}
+<span class="hljs-comment">// ...</span>
+prev_right_edge = <span class="hljs-title function_ invoke__">Some</span>(glyph_x + glyph.width.<span class="hljs-title function_ invoke__">ceil</span>() <span class="hljs-keyword">as</span> <span class="hljs-type">i64</span>);
+</code></pre>
+<p>This enforcement happens in <strong>rounded pixel space</strong>, deliberately, after the earlier attempt to do it in float space (a proportional <code>size * 0.06</code> minimum gap) turned out to still round away to nothing at very small sizes (<code>size = 8</code>) — see <a href="#145-off-by-one-in-the-minimum-gap-calculation">§14.5</a> for the full history, including an off-by-one in the right-edge estimate that initially made even this version ineffective.</p>
+<p>This rule is intentionally an absolute pixel guarantee, not a proportional one: proportional gaps looked inconsistent between uppercase and lowercase text at the same size (see <a href="#145-off-by-one-in-the-minimum-gap-calculation">§14.5</a>), because the same <em>relative</em> gap reads very differently against tall vs. short glyphs. A flat pixel minimum reads consistently regardless of case or glyph height.</p>
+<hr>
+<h2 id="13-stem-darkening">13. Stem darkening</h2>
+<p>Without true font hinting (see <a href="#15-hinting--what-it-is-and-why-were-not-implementing-it">§15</a>), thin strokes at small sizes only cover a small fraction of a pixel and rasterize as faint gray instead of a crisp line — most visible on thin weights (<code>wght</code> near 100) below ~14px. System text renderers compensate with <strong>stem darkening</strong>: artificially boosting low antialiasing-coverage values before blending, so thin strokes stay legible instead of fading out.</p>
+<p>The engine's version is a coverage remap applied right before the coverage becomes the blend alpha, in <code>draw_glyph</code>:</p>
+<pre><code class="language-rust"><span class="hljs-keyword">const</span> STEM_DARKEN_GAMMA: <span class="hljs-type">f32</span> = <span class="hljs-number">0.7</span>;
+<span class="hljs-comment">// ...</span>
+<span class="hljs-keyword">let</span> <span class="hljs-variable">raw_cov</span> = (cov / AA_SAMPLES <span class="hljs-keyword">as</span> <span class="hljs-type">f32</span>).<span class="hljs-title function_ invoke__">min</span>(<span class="hljs-number">1.0</span>);
+<span class="hljs-keyword">let</span> <span class="hljs-variable">boosted_cov</span> = raw_cov.<span class="hljs-title function_ invoke__">powf</span>(STEM_DARKEN_GAMMA);
+<span class="hljs-keyword">let</span> <span class="hljs-variable">alpha</span> = (fg_a * boosted_cov).<span class="hljs-title function_ invoke__">min</span>(<span class="hljs-number">1.0</span>);
+</code></pre>
+<p>An exponent below <code>1.0</code> lifts mid/low coverage values up (e.g. <code>0.25</code> becomes <code>~0.38</code> at <code>γ = 0.7</code>) while leaving <code>0.0</code> and <code>1.0</code> fixed points untouched — so fully-empty and fully-covered pixels are unaffected, only the ambiguous partial-coverage pixels get boosted. Verified visually at <code>size = 10px, weight = 100</code> (the faintest realistic case): text goes from washed-out pale green to solidly legible, with no change to letter shapes or the spacing logic in §12.</p>
+<p>This is a coverage-space approximation of what real stem darkening does (FreeType's CFF driver computes an actual outline expansion amount from ppem + stem width and grows the geometry before rasterizing — see §15). The gamma-curve version here is far cheaper and has no dependency on stem <em>detection</em>, at the cost of being a global approximation rather than a per-stem-width-aware one.</p>
+<hr>
+<h2 id="14-rendering-correctness--bugs-found-and-fixed">14. Rendering correctness — bugs found and fixed</h2>
+<p>This section is a deliberately detailed changelog of every text/color rendering bug found during development, in the order they were found, because several of them look superficially similar but have unrelated root causes. Each entry has: the visible symptom, the root cause, and the fix.</p>
+<h3 id="141-holes-at-stroke-junctions-even-odd-vs-nonzero-winding">14.1 Holes at stroke junctions (even-odd vs. nonzero winding)</h3>
+<p><strong>Symptom:</strong> small square holes exactly where two strokes of a glyph meet — the crossbar/stem junction of <code>t</code> and <code>H</code>, the arm/bowl junction of <code>e</code>.</p>
+<p><strong>Root cause:</strong> <code>draw_glyph</code>'s scanline fill paired up sorted x-intersections two at a time (<code>chunks(2)</code>) and filled between each pair — the even-odd rule. Sora's outlines (like many fonts, especially variable fonts) represent some glyphs as <strong>overlapping contours</strong> rather than one clean non-self-intersecting polygon. Under even-odd, a region covered by two overlapping contours is counted twice and cancels out to &quot;outside,&quot; producing a hole exactly where the overlap is densest — the stroke junctions.</p>
+<p><strong>Fix:</strong> track each intersection's winding direction (<code>+1</code>/<code>-1</code> based on whether the edge crosses the scanline upward or downward) and fill a span only while the running winding-number total is nonzero. This is correct regardless of how many times contours overlap. See the algorithm description in <a href="#textrendererrs">§8</a>.</p>
+<h3 id="142-bottom-row-of-every-glyph-clipped">14.2 Bottom row of every glyph clipped</h3>
+<p><strong>Symptom:</strong> the very bottom pixel row of every glyph was hard-clipped instead of fading out smoothly — visible as an abrupt, flat cutoff instead of a soft antialiased edge.</p>
+<p><strong>Root cause:</strong> <code>draw_glyph</code>'s row loop bound was <code>glyph.height as u32</code> — a <strong>truncating</strong> cast. Whenever a glyph's true height had a fractional part (the common case), the loop stopped one row short of the actual bottom of the glyph, permanently skipping the fractional-coverage row that should have contained the bottom edge's antialiasing.</p>
+<p><strong>Fix:</strong> <code>(glyph.height.ceil() as u32).max(1)</code> — consistent with how <code>width</code> was already handled (<code>glyph.width.ceil()</code>).</p>
+<h3 id="143-descenders-not-hanging-below-the-baseline">14.3 Descenders not hanging below the baseline</h3>
+<p><strong>Symptom:</strong> <code>g</code>, <code>p</code>, <code>q</code>, <code>j</code>, <code>y</code> sat at the same height as every other letter instead of dipping below the line — and separately, letters looked inconsistently sized/positioned relative to each other.</p>
+<p><strong>Root cause:</strong> two compounding issues in the pre-fix positioning formula, <code>y + (size as u32 - glyph.height as u32)</code>:</p>
+<ol>
+<li>It aligned every glyph's <strong>bounding-box bottom</strong> to the same row, regardless of whether that glyph's bounding box naturally extends below the baseline. Since <code>Glyph</code> didn't track where the baseline actually was relative to its own bounding box, there was no way to place descenders correctly — this needed a new field (<code>descent</code>, see <a href="#rendering-modelsglyphrs--glyph">§6</a>).</li>
+<li><code>size as u32</code> and <code>glyph.height as u32</code> were each truncated to an integer <strong>independently</strong> before subtracting, introducing up to ~1px of rounding jitter per glyph — visible as inconsistent apparent letter sizes across a word, even though the underlying scale was identical for every glyph.</li>
+</ol>
+<p><strong>Fix:</strong> added <code>descent: f32</code> to <code>Glyph</code> (computed as <code>(-bbox.y_min * scale).max(0.0)</code> — the ink extent below <code>y = 0</code> in font units), and replaced the two-step truncating subtraction with a single <code>f32</code> expression rounded once: <code>(y as f32 + size - glyph.height + glyph.descent).round()</code>.</p>
+<h3 id="144-left-side-bearing-collapsed-to-zero">14.4 Left side bearing collapsed to zero</h3>
+<p><strong>Symptom:</strong> inconsistent, occasionally cramped spacing between specific letter pairs, worse at small sizes.</p>
+<p><strong>Root cause:</strong> in <code>exctract_glyph</code>, contour points are shifted so the glyph's own ink starts at local <code>x = 0</code>:</p>
+<pre><code class="language-rust">((px - x_min) * scale, (py - y_min) * scale)
+</code></pre>
+<p>This is necessary for compact rasterization, but it also discards the glyph's true left side bearing (the gap between the pen position and where the ink starts) — every glyph gets flush-drawn against the cursor with zero left margin, while the cursor still advances by the <em>full</em> <code>advance_width</code> (which does include the intended margin). Different glyphs have different natural <code>lsb</code> (Sora's ranges from <code>24</code> to <code>106</code> font units across common letters — roughly <code>0.8px</code> to <code>3.4px</code> at 32px), so this produced visibly uneven spacing rather than uniformly-too-tight spacing.</p>
+<p><strong>Fix:</strong> added <code>lsb: f32</code> to <code>Glyph</code> (<code>bbox.x_min * scale</code>), kept the contour-shifting behavior for rasterization efficiency, and had <code>draw_text</code> position each glyph at <code>cursor_x + glyph.lsb</code> instead of <code>cursor_x</code> — while switching the cursor itself from a per-glyph-truncated <code>u32</code> accumulator to a running <code>f32</code> that's only rounded at the point each glyph is actually drawn (removing a second, independent source of cumulative rounding jitter).</p>
+<h3 id="145-off-by-one-in-the-minimum-gap-calculation">14.5 Off-by-one in the minimum-gap calculation</h3>
+<p><strong>Symptom:</strong> after implementing (§12.3)'s minimum-gap logic once already, specific letter pairs (<code>a</code>+<code>b</code>, <code>h</code>+<code>i</code>+<code>j</code>+<code>k</code>) still visibly touched or merged at very small sizes (<code>size = 8</code>), even though every individual <code>(lsb, width, advance)</code> value traced by hand satisfied a ≥1px gap requirement.</p>
+<p><strong>Two root causes, found in sequence:</strong></p>
+<ol>
+<li><strong>First attempt used a proportional gap</strong> (<code>(size * 0.06).max(0.35)</code>) instead of an absolute pixel minimum, on the theory that a fixed pixel amount would look &quot;huge&quot; on small glyphs and negligible on large ones. This backfired: at <code>size = 12</code>, the proportional minimum came out to <code>0.72px</code> — still less than one full pixel, so independent rounding of each glyph's position could still erase it entirely. Small sizes need <em>more</em> absolute protection against rounding error, not less; the proportionality intuition was solving a legibility question (§13's actual job) with a spacing mechanism, not a rounding-safety question.</li>
+<li><strong>After switching to an absolute integer-pixel-space gap</strong> (§12.3's final version), the touching persisted at <code>size = 8</code> specifically. Tracing the exact numbers showed every consecutive pair satisfied the ≥1px rule <em>by the formula being used</em> — the bug was in the formula itself: the previous glyph's estimated rightmost painted column was computed as <code>glyph_x + glyph.width.ceil() - 1</code>, but <code>draw_glyph</code>'s coverage buffer is <code>width.ceil() + 1</code> columns wide specifically to leave room for an antialiased edge column at local x = <code>width.ceil()</code> — one column further right than the estimate assumed. The &quot;1px gap&quot; being enforced was therefore actually guaranteeing a 0px real gap once that edge column's antialiasing was accounted for.</li>
+</ol>
+<p><strong>Fix:</strong> <code>prev_right_edge = glyph_x + glyph.width.ceil()</code> (no <code>- 1</code>), matching <code>draw_glyph</code>'s actual paintable range exactly. Verified by direct pixel tracing (<code>/tmp/azure_text_check</code>-style ad hoc test binaries — see <a href="#16-test-suite-for-text-rendering">§16</a>) at <code>size = 8, weight = 100</code> before and after: before, <code>h</code>/<code>i</code>/<code>j</code>/<code>k</code> rendered as an unreadable merged blob; after, every letter is a distinct, separated shape.</p>
+<h3 id="146-red-and-blue-channels-swapped-everywhere">14.6 Red and blue channels swapped everywhere</h3>
+<p><strong>Symptom:</strong> every color drawn as &quot;red&quot; (<code>Color::new(255, 0, 0, 255)</code>) — rectangles, lines, and red-tinted text — rendered as <strong>blue</strong> on screen. Not text-specific; affected every shape and gradient in the demo scene.</p>
+<p><strong>Root cause:</strong> <code>shm_manager::create_buffer</code> declares the <code>wl_buffer</code> format as <code>ARGB8888</code> (<code>wl_shm.format</code> value <code>0</code>), which the Wayland/DRM spec defines as a 32-bit <code>0xAARRGGBB</code> value — stored <strong>little-endian in memory as bytes <code>[B, G, R, A]</code></strong>. Every pixel-writing function in the engine (<code>buffer::set_pixel</code>, <code>effects::blend_pixel</code>, <code>text/renderer::draw_glyph</code>) was instead writing <code>[color.r, color.g, color.b, color.a]</code> — plain R,G,B,A order. The two byte orders are mirror images of each other in the R/B position, so every red/blue pair silently swapped; green was unaffected because it sits in the same (second) byte position either way.</p>
+<p><strong>Fix:</strong> all three write sites now store <code>[color.b, color.g, color.r, color.a]</code>, and everywhere a pixel is <em>read back</em> for blending (<code>blend_pixel</code>'s background read, <code>draw_glyph</code>'s background read for Porter-Duff compositing) reads <code>buf[idx]</code> as blue and <code>buf[idx+2]</code> as red to match. Verified with a direct assertion: drawing <code>Color::new(255, 0, 0, 255)</code> (pure red) now produces the bytes <code>[0, 0, 255, 255]</code> in <code>canvas.buffer</code> — blue channel <code>0</code>, green <code>0</code>, red <code>255</code>, alpha <code>255</code>, exactly <code>ARGB8888</code>'s expected memory layout for pure red.</p>
+<p>This bug predates the text-rendering work in this changelog and would have affected the engine's very first rectangle/line/gradient output — it was only found while investigating an unrelated text color report, by cross-checking a full-window screenshot against the demo scene's known <code>Color::new(255, 0, 0, 255)</code> calls.</p>
+<h3 id="147-crude-coordinate-snapping--tried-rejected">14.7 Crude coordinate snapping — tried, rejected</h3>
+<p>Not a bug fix — an experiment, kept here because it's useful negative information. To test whether a cheap approximation of hinting would help legibility further, <code>tests/text_snapping_experiment.rs</code> rounds every contour point of a glyph to the nearest integer pixel <em>after</em> scaling, with no stem detection or geometric awareness, and compares the result against the normal renderer side by side.</p>
+<p><strong>Result:</strong> at <code>12px / weight 100</code> the snapped version was <em>more</em> broken than doing nothing — visible holes and illegible letterforms, worse than the unsnapped baseline. At <code>12px / weight 400</code> it was rougher with no clear benefit. At <code>24px / weight 400</code> the two were roughly equivalent. Rounding every point independently, with no understanding of which points belong to the same stem or curve, distorts curves and can make one side of a symmetric letter (like <code>o</code>) round differently from the other.</p>
+<p><strong>Conclusion:</strong> rejected. Not wired into <code>draw_glyph</code> or <code>draw_text</code>. Real hinting (§15) requires understanding <em>which</em> points form a stem before deciding how to snap them — naive per-point rounding is not a shortcut around that requirement.</p>
+<hr>
+<h2 id="15-hinting--what-it-is-and-why-were-not-implementing-it">15. Hinting — what it is, and why we're not implementing it</h2>
+<p>&quot;Hinting&quot; (a.k.a. grid-fitting) is the general term for adjusting a glyph's outline, at rasterization time, so its important features — stem widths, baseline, x-height, cap-height — land on exact pixel boundaries instead of wherever the raw scaled outline happens to fall. It's why system-rendered small text (in a browser, an IDE, a terminal) looks crisper than a naive scale-and-rasterize of the same outline, which is what this engine currently does.</p>
+<p>There are two distinct mechanisms in real-world font renderers (FreeType, DirectWrite, CoreText), of very different scope:</p>
+<p><strong>TrueType bytecode instructions</strong> — some fonts embed literal programs (<code>fpgm</code>/<code>prep</code>/per-glyph instructions) that a virtual machine executes at rasterization time to hint that specific font's specific glyphs. Implementing this means implementing a full instruction-set interpreter (~dozens of opcodes, a &quot;twilight zone&quot; concept, storage/control-value tables). Out of scope: it's a large, self-contained subsystem, and many modern webfonts (including both fonts shipped here) don't ship meaningful bytecode instructions anyway — they rely on the next mechanism instead.</p>
+<p><strong>Autohinting</strong> — analyzes <em>any</em> outline geometrically (no embedded instructions required): detect stem segments, establish &quot;blue zones&quot; from reference letters (<code>o</code>, <code>H</code>, <code>x</code>, etc.) for baseline/x-height/cap-height alignment, then warp the outline so those features snap to the pixel grid, consistently across the whole glyph. This is the mechanism that would actually help our two variable fonts. It's also a multi-thousand-line subsystem in FreeType (<code>aflatin.c</code>, <code>afhints.c</code>, <code>afglobal.c</code>, ...) — a multi-week undertaking with high risk of subtle, hard-to-debug visual regressions if attempted incrementally.</p>
+<p>A <strong>crude approximation</strong> (round every already-scaled contour point to the pixel grid, no stem detection) was tried as a bounded experiment and rejected — see <a href="#147-crude-coordinate-snapping--tried-rejected">§14.7</a>. It reliably made small/thin text <em>worse</em>, not better.</p>
+<p><strong>Where things stand:</strong> real hinting is left as future work (a good candidate for a from-scratch, deliberately scoped implementation — the smallest useful slice is probably just blue-zone baseline/x-height snapping, without full stem detection). In the meantime, <a href="#13-stem-darkening">stem darkening</a> covers the specific &quot;thin strokes fade to gray&quot; symptom cheaply, and the <a href="#123-minimum-pixel-gap-enforcement">minimum pixel gap</a> covers the &quot;letters touch&quot; symptom — between the two, small-size legibility is significantly better than an unmitigated scale-and-rasterize, without taking on hinting's implementation risk.</p>
+<p>If revisited, <strong>FreeType</strong> itself (LGPL/FTL-licensed, the reference implementation used by effectively all of Linux) is the natural reference to study — but pulling it in as a dependency (vs. reading its algorithms and reimplementing them) would mean FFI to a C library, which conflicts with this engine's from-scratch, minimal-dependency approach (see <a href="#1-what-is-azure-engine">§1</a>).</p>
+<blockquote>
+<p><strong>Planned:</strong> the project owner intends to implement this — the real autohinting algorithm, done properly (stem detection, blue zones, coherent outline warping) — by hand, as a deliberate personal challenge, rather than adopting FreeType or leaving it unimplemented. Not scheduled yet; noted here so the intent isn't lost.</p>
+</blockquote>
+<hr>
+<h2 id="16-test-suite-for-text-rendering">16. Test suite for text rendering</h2>
+<p>A number of standalone integration tests were built specifically to validate the text pipeline in isolation, independent of any single visual bug report. They live in <code>tests/</code> at the crate root (sibling to <code>src/</code>) and are ordinary <code>cargo test</code> targets. Several are designed to be inspected visually rather than asserted against, and are meant to be kept and rerun rather than deleted after use:</p>
+<table>
+<thead>
+<tr>
+<th>Test file</th>
+<th>What it checks</th>
+<th>How to inspect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>text_min_spacing_check.rs</code></td>
+<td>Minimum-gap enforcement across size/weight combinations, headless (no Wayland)</td>
+<td><code>cargo test --test text_min_spacing_check -- --nocapture</code>, then open the <code>.ppm</code> files under <code>/tmp/azure_text_check/</code></td>
+</tr>
+<tr>
+<td><code>text_min_spacing_window.rs</code></td>
+<td>Same, but in a real Wayland window for live/visual inspection</td>
+<td><code>cargo test --test text_min_spacing_window -- --nocapture</code></td>
+</tr>
+<tr>
+<td><code>text_alignment_grid.rs</code></td>
+<td>Draws a line through the center of each glyph's advance cell, overlaid on the real text, to check per-glyph centering without guessing</td>
+<td><code>cargo test --test text_alignment_grid -- --nocapture</code>, inspect <code>/tmp/azure_text_check/grid_*.ppm</code></td>
+</tr>
+<tr>
+<td><code>text_file_vs_window.rs</code></td>
+<td>Writes the <em>same</em> canvas buffer to a file and to a live window in one run, to isolate rendering bugs from display/compositor artifacts</td>
+<td><code>cargo test --test text_file_vs_window -- --nocapture</code>, compare the <code>.ppm</code> against a screenshot of the window</td>
+</tr>
+<tr>
+<td><code>text_roboto_size_weight_matrix.rs</code></td>
+<td>Full size (10–24px) × weight (100/400/700/900) matrix on Roboto, live window</td>
+<td><code>cargo test --test text_roboto_size_weight_matrix -- --nocapture</code></td>
+</tr>
+<tr>
+<td><code>text_snapping_experiment.rs</code></td>
+<td>The rejected crude-snapping experiment from <a href="#147-crude-coordinate-snapping--tried-rejected">§14.7</a>, kept for reference — <strong>not</strong> wired into the real renderer</td>
+<td><code>cargo test --test text_snapping_experiment -- --nocapture</code>, inspect <code>/tmp/azure_text_check/snap_compare.ppm</code></td>
+</tr>
+<tr>
+<td><code>debug_case_compare.rs</code></td>
+<td>Ad hoc upper/lowercase spacing comparison at multiple sizes</td>
+<td><code>cargo test --test debug_case_compare -- --nocapture</code></td>
+</tr>
+</tbody>
+</table>
+<p>Since <code>.ppm</code> isn't always recognized by a default image viewer, convert with ImageMagick if needed: <code>convert foo.ppm foo.png</code> (or <code>magick foo.ppm foo.png</code> on newer ImageMagick installs).</p>
+<p>The headless (<code>.ppm</code>-writing) tests exist specifically because, at one point during development, a live-window screenshot appeared to show a bug that a byte-identical headless render of the same draw calls did not — <code>text_file_vs_window.rs</code> was built to make that comparison directly reproducible rather than argued about from separate screenshots.</p>
+<hr>
+<h2 id="17-current-capabilities-and-limitations">17. Current capabilities and limitations</h2>
+<p><strong>What works:</strong></p>
+<ul>
+<li>Persistent, interactive window on any Linux Wayland desktop</li>
+<li>Dynamic compositor service discovery</li>
+<li>Shared memory allocation and pixel-level access</li>
+<li>File descriptor transmission via <code>SCM_RIGHTS</code></li>
+<li>Full event loop: ping/pong, configure/ack, clean close</li>
+<li>Monitor resolution query (<code>get_screen_resolution</code>)</li>
+<li>Window title (<code>xdg_manager::set_title</code>)</li>
+<li><code>AzureWindowProvider</code> trait implemented — <code>render(pixels)</code> and <code>poll_event()</code></li>
+<li><strong>CPU software renderer — fully operational:</strong>
+<ul>
+<li><code>Canvas</code> — drawing surface with flat pixel buffer, stored directly in Wayland's <code>B,G,R,A</code> byte order</li>
+<li><code>Color</code> — RGBA color model at the API surface (reordered only at write time)</li>
+<li><code>set_pixel</code> / <code>get_pixel_index</code> — pixel-level access with bounds checking</li>
+<li><code>draw_rect</code> — filled rectangle</li>
+<li><code>draw_rect_rounded</code> — rectangle with rounded corners</li>
+<li><code>draw_line_horizontal</code> / <code>draw_line_vertical</code> — axis-aligned lines</li>
+<li><code>draw_line</code> — general line, antialiased</li>
+<li><code>draw_circle</code> — antialiased circle outline</li>
+<li><code>draw_circle_filled</code> — filled circle</li>
+<li><code>blend_pixel</code> — Porter-Duff alpha compositing</li>
+<li><code>draw_gradient_horizontal</code> / <code>draw_vertical_gradient</code> — linear gradients</li>
+<li><code>draw_angular_gradiant</code> — gradient along an arbitrary angle</li>
+<li><code>draw_text</code> — high-quality <strong>variable-font-aware</strong> TTF text rendering: nonzero-winding fill, gamma-correct AA, shared baseline with correct descenders, corrected side bearings, guaranteed minimum inter-glyph pixel gap, and stem darkening for small/thin legibility</li>
+</ul>
+</li>
+</ul>
+<p><strong>Current limitations:</strong></p>
+<ul>
+<li>No real font hinting (see <a href="#15-hinting--what-it-is-and-why-were-not-implementing-it">§15</a>) — stem darkening and minimum-gap enforcement mitigate the worst symptoms but don't replace true grid-fitting</li>
+<li>No pair kerning (GPOS/kern table) — <code>text/kerning.rs</code> currently only returns the glyph's own advance width</li>
+<li><code>draw_text</code> re-parses the whole font face <strong>per character</strong> (via <code>exctract_glyph</code> → <code>load_font</code>/<code>Face::parse</code>) rather than once per call — correctness is unaffected but this is wasted work on longer strings</li>
+<li>Width axis (<code>wdth</code>) on Roboto is not exposed by <code>draw_text</code> — only <code>wght</code> is settable</li>
+<li>Object ids in <code>window_manager.rs</code> partially hardcoded</li>
+<li>No keyboard/mouse input routing yet</li>
+<li>No dynamic resize</li>
+</ul>
+<hr>
+<h2 id="18-what-comes-next">18. What comes next</h2>
+<p><strong>Input routing:</strong></p>
+<ul>
+<li>Bind <code>wl_seat</code>, parse keyboard and pointer events</li>
+<li>Return as <code>WindowKeyPress</code>, <code>WindowMouseMove</code> variants from <code>poll_event()</code></li>
+</ul>
+<p><strong>Dynamic resize:</strong></p>
+<ul>
+<li>Recreate shared memory and buffer on <code>WindowResize</code> event</li>
+</ul>
+<p><strong>Text rendering:</strong></p>
+<ul>
+<li>Real hinting, scoped down to blue-zone baseline/x-height snapping first (see <a href="#15-hinting--what-it-is-and-why-were-not-implementing-it">§15</a>)</li>
+<li>Pair kerning (GPOS)</li>
+<li>Cache parsed <code>ttf_parser::Face</code> per <code>(font_path, weight)</code> instead of re-parsing per character</li>
+</ul>
+<p><strong>Future platforms:</strong></p>
+<ul>
+<li><code>win32/</code> — <code>AzureWindowProvider</code> implementation using the Win32 API (CreateWindow, GDI shared memory)</li>
+<li><code>cocoa/</code> — <code>AzureWindowProvider</code> implementation using Cocoa / Core Graphics on macOS</li>
+</ul>
+<p>All platform-specific code will live under <code>src/platform/&lt;target&gt;/</code> behind the same <code>AzureWindowProvider</code> trait, keeping Foundation and all applications fully portable.</p>
+<hr>
+<p><em>Azure Engine is built entirely from scratch, without any GUI framework or Wayland binding library. Every byte of every Wayland message is constructed manually. The rendering module follows the same philosophy: no graphics library, pure CPU rasterization from first principles — including its font rendering, which parses and rasterizes TTF/OTF outlines (variable fonts included) without FreeType or any other font-rendering library.</em></p>
+
+            
+            
+        </body>
+        </html>

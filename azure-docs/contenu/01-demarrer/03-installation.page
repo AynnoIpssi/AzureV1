@@ -1,0 +1,48 @@
+titre: Installation
+resume: Compiler Azure, installer ses daemons et le démarrer à la connexion.
+
+## Compiler
+Azure est un workspace Cargo. Tout se compile d'un coup, en mode release pour une installation :
+
+```sh demarrer.installation.1 "Compiler tout le workspace"
+cd ~/Dev/Azure
+cargo build --release
+```
+
+> note: Le moteur de rendu, azure-foundation, azure-core et azure-stockage sont optimisés même en mode dev (voir le Cargo.toml du workspace) : sans cela, le rendu serait dix fois plus lent et la crypto trente fois.
+
+## Installer les daemons
+azure setup copie les binaires système (provider, routeur, stockage, service, manager, tableau de bord, la commande azure) dans ~/.local/share/azure/bin et relie ~/.local/bin/azure.
+
+```sh demarrer.installation.2 "Installer Azure"
+./target/release/azure setup --from target/release
+azure list
+```
+
+## Démarrer à la connexion
+azure autostart écrit un service systemd utilisateur (azure-provider.service). Avec --now, il démarre tout de suite.
+
+```sh demarrer.installation.3 "Lancer Azure à chaque connexion"
+azure autostart on --now
+azure autostart status
+azure autostart off
+```
+
+> astuce: Ce n'est pas obligatoire : la première app lancée démarre azure-provider elle-même, qui démarre ensuite les autres daemons à la demande.
+
+## Où sont les fichiers
+| Chemin | Contenu |
+|---|---|
+| ~/.local/share/azure/bin | Binaires système d'Azure |
+| ~/.local/share/azure/apps/<nom> | Une app installée : son binaire, app.azure, ses fichiers |
+| ~/.local/share/applications/azure-<nom>.desktop | Son entrée dans le lanceur |
+| ~/.local/share/azure/stockage | Données chiffrées des apps |
+| $XDG_RUNTIME_DIR/azure | Sockets des daemons (dossier privé, mode 700) |
+| ~/.config/azure/provider.conf | Services déclarés à la main (optionnel) |
+
+## Vérifier l'installation
+Le tableau de bord montre les apps connues, les daemons et leur état :
+
+```sh demarrer.installation.4 "Ouvrir le tableau de bord"
+azure run tableau-de-bord
+```

@@ -1,0 +1,45 @@
+titre: Tables partagées
+resume: Ouvrir une table aux autres apps, en lecture publique ou avec des comptes.
+
+## Partager
+| Instruction | Effet |
+|---|---|
+| SHARE TABLE notes PUBLIC | Toutes les apps lisent ; écrire demande un compte writer |
+| SHARE TABLE notes PROTECTED | Il faut un compte de l'app : reader lit, writer écrit |
+| UNSHARE TABLE notes | Plus aucun accès |
+
+```rss rss.tables-partagees.1 "Côté propriétaire"
+SHARE TABLE notes PROTECTED;
+SHOW TABLES;
+```
+
+Les comptes sont ceux de l'app propriétaire (Stockage › Comptes) : les mêmes protègent ses valeurs partagées et ses tables.
+
+## Utiliser la table d'une autre app
+Une table d'une autre app s'écrit @<id>.<table>, où id est l'identifiant de l'app propriétaire. login donne le compte à utiliser pour ses tables protégées.
+
+```rust rss.tables-partagees.2 "Côté lecteur"
+use azure_foundation::params;
+
+let carnet = app.resolve("carnet")?;
+let db = app.stockage()?.db().login(carnet, "maman", "1234");
+let sql = format!("SELECT titre FROM @{carnet}.notes WHERE faite = ?");
+let titres: Vec<String> = db.query(&sql, &params![false])?.column("titre")?;
+```
+
+## Mélanger avec ses tables
+Une requête peut joindre une table à soi et une table partagée.
+
+```rss rss.tables-partagees.3 "Mes favoris parmi les notes du carnet"
+SELECT n.titre FROM favoris f JOIN @1000.notes n ON n.id = f.note_id ORDER BY n.titre;
+```
+
+## Ce qui est refusé
+| Situation | Erreur |
+|---|---|
+| Table non partagée | la table n'est pas partagée |
+| PROTECTED sans compte | il faut un compte de l'app |
+| Mauvais mot de passe | identifiants refusés |
+| Compte reader qui écrit | écriture refusée (lecture seule) |
+| Écrire dans une table PUBLIC sans compte writer | écriture refusée |
+| DROP, SHARE ou CREATE INDEX sur @id.table | impossible : seule l'app propriétaire gère ses tables |

@@ -1,0 +1,18 @@
+[package]
+name = "azure-dashboard"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "azure_dashboard"
+path = "src/main.rs"
+
+[dependencies]
+azure-foundation = { path = "../azure-foundation" }
+azure-manager = { path = "../azure-manager" }
+azure-service = { path = "../azure-service" }
+
+[dev-dependencies]
+azure-engine = { path = "../azure-engine" }
+azure-provider = { path = "../azure-provider" }
+azure-core = { path = "../azure-core" }

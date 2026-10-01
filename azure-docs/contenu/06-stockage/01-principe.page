@@ -1,0 +1,30 @@
+titre: Principe
+resume: Un daemon, un espace chiffré par app, et rien à configurer.
+
+## Comment ça marche
+Les apps ne touchent jamais le disque elles-mêmes : elles parlent au daemon azure-stockage, qui garde les données de chacune dans un espace privé, chiffré (ChaCha20-Poly1305). Une app ne peut lire que son propre espace, et ce que les autres ont choisi de partager.
+
+```rust stockage.principe.1 "Compter les lancements"
+let app = azure_foundation::azure_app!()?;
+let store = app.stockage()?;
+let n = store.update("lancements", 0i64, |n| n + 1)?;
+println!("lancée {n} fois");
+```
+
+## Qui est qui
+Le daemon reconnaît l'app à l'autre bout du socket (son exécutable, vérifié par le noyau) et demande à azure-manager si c'est bien elle. Une app installée est reconnue par l'empreinte SHA-256 de son binaire : un autre programme ne peut pas se faire passer pour elle.
+
+## Trois façons de ranger
+| Besoin | Outil | Page |
+|---|---|---|
+| Quelques réglages, un compteur, un brouillon | clés et valeurs | Clés et valeurs |
+| Des données à montrer à d'autres apps | partages, avec ou sans comptes | Partager |
+| Des tables, des requêtes, des jointures | RsS (SQL) | section RsS |
+
+## Limites
+| Quoi | Maximum |
+|---|---|
+| Une clé | 256 octets, sans caractère de contrôle |
+| Une valeur | 16 Mo |
+
+> note: Dans une fenêtre, ctx.stockage() donne le même stockage que app.stockage() ; un Stockage se clone librement (toutes les copies partagent la connexion).

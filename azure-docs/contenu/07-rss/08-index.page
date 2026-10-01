@@ -1,0 +1,24 @@
+titre: Index
+resume: Retrouver vite une ligne par une colonne, ou imposer qu'une valeur soit unique.
+
+## Créer un index
+Sans index, chercher WHERE categorie = 'fruit' lit toute la table. Un index sur la colonne retrouve directement les lignes. La clé primaire est toujours indexée.
+
+```rss rss.index.1 "Index simple et index unique"
+CREATE INDEX par_categorie ON produits (categorie);
+CREATE UNIQUE INDEX noms ON produits (nom);
+DROP INDEX par_categorie;
+```
+
+## Index unique
+Un index UNIQUE refuse les doublons, comme la contrainte UNIQUE :
+- sa création échoue si la colonne contient déjà des doublons ;
+- ensuite, un INSERT ou un UPDATE qui créerait un doublon est refusé.
+
+| Instruction | Effet |
+|---|---|
+| CREATE INDEX nom ON table (colonne) | Index sur une colonne |
+| CREATE UNIQUE INDEX nom ON table (colonne) | Index qui interdit les doublons |
+| DROP INDEX nom | Le retire |
+
+> astuce: Une lecture par clé primaire est immédiate même sur des dizaines de milliers de lignes : c'est vérifié par les tests d'azure-stockage (200 lectures sur 20 000 lignes en moins d'une demi-seconde, en mode debug).

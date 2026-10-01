@@ -1,0 +1,54 @@
+titre: Afficher dans une page
+resume: Des lignes SQL vers une page rsH : row.context() et les listes.
+
+## Une ligne
+row.context() met les colonnes d'une ligne dans un contexte rsH, sous leur nom.
+
+```rust rss.afficher.1 "Le détail d'un produit"
+use azure_foundation::params;
+
+let app = azure_foundation::azure_app!()?;
+let ui = app.manifest().dir.join("ui");
+let db = app.stockage()?.db();
+let routes = app.routes().view_with("/produit/{id}", ui.join("produit.rsh").to_str().unwrap(), ui.join("app.rsc").to_str().unwrap(), move |requete| {
+    let id: i64 = requete.param("id").and_then(|s| s.parse().ok()).unwrap_or(0);
+    match db.first("SELECT nom, prix, stock FROM produits WHERE id = ?", &params![id]) {
+        Ok(Some(ligne)) => ligne.context(),
+        _ => azure_foundation::compiler::services::condition::Context::new().with_text("nom", "Produit introuvable"),
+    }
+});
+```
+
+```rsh rss.afficher.2 "ui/produit.rsh"
+<title1>{{nom}}<!title1>
+<text>{{prix}} € · {{stock}} en stock<!text>
+```
+
+## Une liste
+Pour une boucle, on construit une liste d'objets : un objet par ligne.
+
+```rust rss.afficher.3 "Toutes les lignes"
+use azure_foundation::compiler::services::condition::{ConditionValue, Context};
+
+fn liste(db: &azure_foundation::storage::Db) -> Context {
+    let produits: Vec<ConditionValue> = match db.query("SELECT id, nom, prix FROM produits ORDER BY nom", &[]) {
+        Ok(lignes) => lignes.iter().map(|l| ConditionValue::map([
+            ("id", ConditionValue::Number(l.get_or("id", 0i64) as f64)),
+            ("nom", l.get_or("nom", String::new()).into()),
+            ("prix", ConditionValue::Number(l.get_or("prix", 0.0))),
+        ])).collect(),
+        Err(_) => Vec::new(),
+    };
+    Context::new().with_value("produits", ConditionValue::List(produits))
+}
+```
+
+```rsh rss.afficher.4 "ui/produits.rsh"
+<for.p in produits>
+    <container.ligne>
+        <text>{{p.nom}}<!text>
+        <text.prix>{{p.prix}} €<!text>
+        <button.small#produit-{{p.id}}>Voir<!button>
+    <!container>
+<!for>
+```

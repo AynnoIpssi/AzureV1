@@ -1,0 +1,63 @@
+titre: azure-engine
+resume: La couche la plus basse : parler Wayland, dessiner des pixels, lire les polices et les PNG.
+
+## Son rôle
+azure-engine met une fenêtre à l'écran et y dessine, sans aucune bibliothèque graphique. Trois parties :
+
+| Partie | Dossier | Contenu |
+|---|---|---|
+| Plateforme | platform/wayland | Le protocole Wayland écrit à la main |
+| Rendu | rendering | Canvas, formes, texte, images, effets |
+| Codecs | codec | DEFLATE, zlib, PNG |
+
+## Wayland à la main
+Wayland est un protocole binaire sur un socket unix : chaque message = id d'objet, opcode, taille, arguments. azure-engine construit ces messages lui-même.
+
+```texte fonctionnement.engine.1 "Ouverture d'une fenêtre"
+connexion au socket du compositeur ($WAYLAND_DISPLAY)
+  → wl_display.get_registry        la liste des interfaces disponibles
+  → bind : wl_compositor, wl_shm, xdg_wm_base, wl_seat, wl_output,
+           wl_data_device_manager, zxdg_decoration_manager_v1
+  → wl_compositor.create_surface   la surface où l'on dessine
+  → xdg_wm_base.get_xdg_surface → get_toplevel   en faire une fenêtre
+  → memfd + wl_shm.create_pool (fd passé par SCM_RIGHTS) → create_buffer
+  → attach + damage + commit       l'image apparaît
+```
+
+| Manager | Rôle |
+|---|---|
+| connection_manager, registry_manager, bind_manager | Connexion, registre, liaison des interfaces |
+| shm_manager, shared_memory_manager | Mémoire partagée avec le compositeur (pas de copie) |
+| xdg_manager, window_manager | Fenêtre : titre, app_id, déplacement, redimensionnement, plein écran |
+| decoration_manager | Demande à dessiner soi-même la barre de titre |
+| seat_manager | Clavier et souris ; la carte XKB du clavier envoyée par le compositeur |
+| cursor_manager | Afficher les curseurs dessinés par Azure |
+| clipboard_manager | Presse-papiers du système (copier, coller entre apps) |
+| surface_manager | La boucle d'événements |
+
+## La boucle d'événements
+`run_event_loop_interactive` attend, avec `poll`, soit un message du compositeur, soit l'heure du prochain **tic**. À chaque message, il le traduit en `WindowEvent` (souris, touche, redimensionnement, fermeture) et appelle `on_event` ; à chaque tic, `on_tick`. Si l'un des deux rend `false`, la boucle s'arrête. Un `poll` interrompu par un signal compte comme un tic.
+
+## Le rendu
+Tout est logiciel : un `Canvas` est une image en mémoire, 4 octets par pixel dans l'ordre B, G, R, A attendu par Wayland.
+
+| Fonction | Dessine |
+|---|---|
+| draw_rect | Un rectangle plein, pixels écrits tels quels |
+| draw_box | Une boîte décorée : ombre, fond uni ou dégradé, coins arrondis anticrénelés, bordure pleine, tirets, pointillés ou double, transparence |
+| draw_text, draw_text_with | Du texte (taille, graisse, italique, espacement) |
+| draw_image, draw_image_scaled | Une image PNG, avec cache |
+| effects | Opacité |
+
+Chaque pixel d'une boîte est calculé à partir de sa **distance signée** au bord de la forme : l'anticrénelage des coins et des bordures vient de là.
+
+## Le texte
+- La police (Sora, à graisse variable) est lue par `ttf-parser`, une seule fois par chemin.
+- Chaque glyphe est rastérisé par Azure : contours en courbes, couverture calculée par pixel, correction gamma.
+- La graisse (100 à 900) est appliquée au contour ; les traits fins sont légèrement épaissis aux petites tailles, faute de hinting.
+- `measure_text_width`, `char_positions` et `char_index_at` servent à la mise en page et au curseur de texte.
+
+## Les images
+Le décodeur PNG est écrit de zéro : lecture des chunks, décompression zlib/DEFLATE (algorithme de référence de `puff.c`, Huffman canonique), filtres de lignes. Profondeur 8 bits, couleurs RGB et RGBA uniquement (ni gris ni palette), sans entrelacement : ce qui couvre les icônes et images d'interface.
+
+> note: azure-engine ne sait rien des pages, des boutons ni du rsC : il ne connaît que des pixels et des événements. C'est azure-foundation qui décide quoi dessiner.

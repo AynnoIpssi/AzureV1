@@ -1,0 +1,59 @@
+titre: Introduction
+resume: Ce que fait chaque pièce d'Azure, et comment elles s'assemblent.
+
+## Ce qu'est Azure
+Azure est un environnement complet pour écrire des applications de bureau sous Linux (Wayland), entièrement en Rust et sans dépendance lourde : pas de GTK, pas de navigateur embarqué. Le rendu est fait à la main, pixel par pixel, et l'interface s'écrit comme un site web.
+
+Une app Azure n'est pas seule : des daemons lui donnent un stockage chiffré, des flux de données en temps réel vers d'autres apps, des appels de méthodes entre apps, un routeur de messages, et un bac à sable qui l'enferme.
+
+## Une app, trois langages
+- rsH décrit la structure de l'écran, comme du HTML.
+- rsC décrit son style, comme du CSS (mêmes sélecteurs, mêmes propriétés).
+- Rust porte la logique : données affichées, réaction aux clics, échanges avec les autres apps.
+
+```rsh demarrer.introduction.1 "La structure : ui/accueil.rsh"
+<container.page>
+    <title1>Bonjour {{nom}}<!title1>
+    <text.intro>Ta première app Azure.<!text>
+    <button.cta#valider>Valider<!button>
+<!container>
+```
+
+```rsc demarrer.introduction.2 "Le style : ui/app.rsc"
+.page { display: flex; flex-direction: column; gap: 12px; padding: 32px; }
+.intro { color: #9d9a93; }
+.cta { padding: 10px 18px; border-radius: 8px; background-color: #262420; }
+.cta:hover { background-color: #302c26; }
+```
+
+```rust demarrer.introduction.3 "La logique : src/main.rs"
+fn main() -> Result<(), String> {
+    let app = azure_foundation::azure_app!()?;
+    app.window()?
+        .on_click(|ctx| {
+            if ctx.clicked == Some("valider") {
+                println!("Validé !");
+            }
+        })
+        .run();
+    Ok(())
+}
+```
+
+## Les pièces d'Azure
+| Pièce | Rôle |
+|---|---|
+| azure-engine | Fenêtre Wayland, rendu logiciel, texte, images |
+| azure-foundation | rsH, rsC, mise en page, composants, fenêtre d'app, AzureApp |
+| azure-core | Formats partagés, crypto, sécurité (bac à sable, identité) |
+| azure-provider | Lance et surveille tous les daemons |
+| azure-rooter | Messages et fenêtres partagées entre apps |
+| azure-stockage | Données privées chiffrées de chaque app, partage, SQL (RsS) |
+| azure-service | Flux en temps réel et appels de méthodes entre apps |
+| azure-manager | Registre des apps (manifestes, droits), tableau de bord |
+| azure-cli | La commande azure : installer, lancer, démarrer à la connexion |
+
+> note: Une app n'a jamais à lancer ces daemons elle-même : le premier appel qui en a besoin passe par azure-provider, qui les démarre et les relance s'ils tombent.
+
+## Pour aller plus loin
+La page Installation met Azure en place sur la machine ; Première app construit une app complète, manifeste compris.

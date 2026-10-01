@@ -1,0 +1,88 @@
+titre: Survol, focus et transitions
+resume: Changer le style au survol, pendant l'appui et au focus, en douceur ; forme du curseur ; couleur des champs.
+
+## :hover et :focus
+Un bouton, un champ ou une zone de texte peut changer de couleur de fond et de texte au survol de la souris et quand il a le focus (clic ou Tab).
+
+```rsc rsc.etats.1 "Survol et focus"
+.bouton { background-color: #262420; color: #e0cfb3; }
+.bouton:hover { background-color: #302c26; }
+.champ { border: 1px solid #2c2c2c; }
+.champ:focus { border: 1px solid #c9a878; }
+```
+
+```apercu "Survole le bouton, clique dans le champ"
+<container.ap-ligne>
+    <button.bouton>Survole-moi<!button>
+    <input.champ placeholder="Clique ici : bordure au focus"/>
+<!container>
+---
+.bouton { height: 36px; padding: 0 16px; border-radius: 6px; font-weight: 600; }
+.champ { width: 260px; height: 36px; padding: 0 10px; background-color: #1a1a1a; border-radius: 6px; }
+```
+
+## :active
+Pendant qu'on appuie sur un bouton, :active choisit son fond et la couleur de son texte. Un bouton appuyé est aussi survolé : écrire :active après :hover pour qu'il l'emporte. Sans règle :active, le bouton s'assombrit juste un peu, dans sa propre teinte.
+
+```rsc rsc.etats.2 "Un bouton qui s'enfonce"
+.valider { background-color: #262420; color: #e0cfb3; }
+.valider:hover { background-color: #302c26; }
+.valider:active { background-color: #c9a878; color: #1a1712; }
+```
+
+```apercu "Appuie sur le bouton et garde-le enfoncé"
+<container.ap-ligne>
+    <button.valider>Valider<!button>
+    <button.ap-boite>Sans :active<!button>
+<!container>
+---
+.valider { height: 36px; padding: 0 18px; border-radius: 6px; font-weight: 600; }
+.ap-boite { height: 36px; }
+```
+
+## Transitions
+transition fait passer d'une couleur à l'autre en douceur : durée, courbe (ease, linear, ease-in-out, cubic-bezier(), steps()) et délai.
+
+```rsc rsc.etats.3 "Un survol progressif"
+.carte-lien { background-color: transparent; transition: background-color 0.15s ease; }
+.carte-lien:hover { background-color: rgba(255, 255, 255, 0.03); }
+```
+
+```apercu "Survole la carte"
+<container.carte-lien.ap-case><text>Le fond apparaît en douceur, en 0.15 s<!text><!container>
+```
+
+> note: Les transitions portent sur les couleurs de survol et de focus des boutons et des champs, pas sur les tailles ni les positions.
+
+## Curseur
+cursor choisit la forme du pointeur au-dessus de l'élément : pointer, text, not-allowed, crosshair, move, wait, grab, help, ew-resize, ns-resize, default. Sans cursor, la forme dépend de l'élément (main sur un bouton, barre sur un champ).
+
+```rsc rsc.etats.4 "Formes du curseur"
+.carte-cliquable { cursor: pointer; }
+.desactive { cursor: not-allowed; }
+.poignee { cursor: ew-resize; }
+```
+
+```apercu "Passe la souris sur chaque case"
+<container.ap-ligne>
+    <container.carte-cliquable.ap-case><text>pointer<!text><!container>
+    <container.desactive.ap-case><text>not-allowed<!text><!container>
+    <container.poignee.ap-case><text>ew-resize<!text><!container>
+<!container>
+```
+
+## accent-color
+Couleur des cases cochées, interrupteurs, curseurs et barres de progression.
+
+```rsc rsc.etats.5 "Champs aux couleurs de l'app"
+.formulaire { accent-color: #c9a878; }
+```
+
+```apercu "Les cases prennent la couleur de l’app"
+<container.formulaire.ap-ligne>
+    <checkbox checked="true">Case cochée<!checkbox>
+    <radio name="ap-choix" value="a" checked="true">Choix A<!radio>
+    <radio name="ap-choix" value="b">Choix B<!radio>
+    <slider value="60"/>
+<!container>
+```

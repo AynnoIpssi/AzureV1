@@ -1,0 +1,27 @@
+titre: Tableau de bord
+resume: L'app qui montre et règle tout : apps, liens, services, événements, journaux.
+
+## Les pages
+| Page | Contenu |
+|---|---|
+| Apps | Chaque app : active ou non, ses flux partagés, ceux qu'elle écoute, ses méthodes, ses erreurs |
+| Détail d'une app | Régler qui écoute chaque flux et qui appelle chaque méthode ; compteurs |
+| Liens | Qui parle à qui (flux, appels) |
+| Services | Les daemons et services, leur état, leurs relances ; relancer |
+| Événements | Informations, avertissements et erreurs signalés par les apps |
+| Journaux | Les dernières lignes du journal d'un service ou d'une app |
+
+```sh manager.tableau-de-bord.1 "L'ouvrir"
+azure run tableau-de-bord
+```
+
+## Une app Azure comme les autres
+Le tableau de bord est écrit en rsH et rsC, avec AzureApp. Il écoute le flux etat qu'azure-manager publie (réservé aux outils d'administration d'Azure) et lui envoie les réglages.
+
+## Régler les droits
+Pour un flux partagé ou une méthode fournie :
+- autoriser une autre app, ou en retirer une ;
+- rendre public, ou privé ;
+- revenir à ce que dit le manifeste.
+
+Le changement est appliqué tout de suite par azure-service et gardé par azure-manager.

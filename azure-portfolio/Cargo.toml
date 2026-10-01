@@ -1,0 +1,14 @@
+[package]
+name = "azure-portfolio"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "azure_portfolio"
+path = "src/main.rs"
+
+[dependencies]
+azure-foundation = { path = "../azure-foundation" }
+
+[dev-dependencies]
+azure-engine = { path = "../azure-engine" }

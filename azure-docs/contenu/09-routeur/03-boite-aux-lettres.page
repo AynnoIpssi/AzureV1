@@ -1,0 +1,16 @@
+titre: Boîte aux lettres
+resume: Les messages envoyés à une app qui ne tourne pas l'attendent.
+
+## Le principe
+Un message pour une app absente n'est pas perdu : le routeur le garde, chiffré sur disque, et le lui livre dès qu'elle s'enregistre. C'est aussi le cas si l'app disparaît pendant l'envoi, ou si elle ne lit plus depuis 2 secondes.
+
+| Règle | Valeur |
+|---|---|
+| Messages gardés par app | 500 au plus |
+| Durée de garde | 7 jours |
+| Fichier | ~/.local/share/azure/rooter/mailbox.bin (chiffré) |
+
+```rust routeur.boite-aux-lettres.1 "Prévenir une app plus tard"
+// carnet ne tourne pas : le message l'attend.
+app.send("carnet", "3 notes à relire")?;
+```

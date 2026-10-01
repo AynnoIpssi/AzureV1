@@ -1,0 +1,48 @@
+[workspace]
+members = [
+    "azure-cli",
+    "azure-core",
+    "azure-dashboard",
+    "azure-docs",
+    "azure-engine",
+    "azure-foundation",
+    "azure-rooter",
+    "azure-service",
+    "azure-manager",
+    "azure-note",
+    "azure-provider",
+    "azure-stockage",
+    "azure-test/app-test/app-a",
+    "azure-test/app-test/app-b",
+    "azure-test/app-test/app-c",
+    "azure-ide",
+    "azure-portfolio",
+    "azure-meteo",
+    "azure-testeur",
+    "azure-practice",
+]
+resolver = "2"
+
+# Le rendu est fait a la main, pixel par pixel (azure-engine) : sans
+# optimisation, une image prend ~10x plus de temps (mesure : ~30ms au lieu
+# de ~2ms pour une page qui defile, voir azure-foundation/tests/scroll_perf.rs).
+# On optimise donc le moteur et azure-foundation meme en `cargo run` ; le
+# code des applications reste compile normalement (debogage inchange).
+[profile.dev.package.azure-engine]
+opt-level = 3
+
+[profile.dev.package.azure-foundation]
+opt-level = 3
+
+[profile.dev.package.ttf-parser]
+opt-level = 3
+
+# PBKDF2 (mots de passe des comptes, 100 000 tours) est ~30x plus lent sans
+# optimisation.
+[profile.dev.package.azure-stockage]
+opt-level = 3
+
+# SHA-256 de l'executable a chaque connexion d'une app (identite) : ~30x
+# plus lent sans optimisation.
+[profile.dev.package.azure-core]
+opt-level = 3

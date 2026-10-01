@@ -1,0 +1,19 @@
+titre: Identité
+resume: Comment les daemons savent quelle app est à l'autre bout du socket.
+
+## À l'installation
+azure install enregistre auprès d'azure-manager l'exécutable de l'app, l'empreinte SHA-256 de son binaire et le manifeste installé.
+- Une app installée est reconnue à son empreinte : elle peut être déplacée, pas remplacée.
+- Elle garde son identifiant, et donc ses données, d'une installation à l'autre.
+- Le manifeste qui fait foi est celui de l'installation, pas celui que l'app annonce.
+
+## À chaque connexion
+Le noyau donne au daemon le processus à l'autre bout du socket (SO_PEERCRED). azure-stockage, azure-service et le routeur demandent alors à azure-manager si ce processus est bien l'app qu'il prétend être (même empreinte, ou même exécutable en développement). Un imposteur est refusé.
+
+| Cas | Règle |
+|---|---|
+| App installée | Même empreinte SHA-256 |
+| App en développement | Même chemin d'exécutable, ou même empreinte |
+| Identifiant écrit à la main (< 1000) | Le premier exécutable arrivé le garde |
+
+> note: Une app sans la permission stockage est refusée par azure-stockage, même si c'est bien elle.

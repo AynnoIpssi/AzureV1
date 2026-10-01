@@ -1,0 +1,43 @@
+titre: Texte et variables
+resume: Afficher du texte, des caractères spéciaux et les valeurs du contexte avec {{…}}.
+
+## Du texte
+Le texte entre deux balises est affiché tel quel ; les espaces et retours à la ligne sont regroupés comme en HTML, sauf si le style demande white-space: pre.
+
+## Caractères spéciaux
+Un < ouvre toujours une balise. Pour l'afficher, on utilise une entité, comme en HTML :
+
+| Écrire | Pour afficher |
+|---|---|
+| &lt; | < |
+| &gt; | > |
+| &amp; | & |
+
+```rsh rsh.texte.1 "Entités"
+<text>Si a &lt; b &amp;&amp; b &gt; c<!text>
+```
+
+## Variables
+{{nom}} est remplacé par la valeur nommée nom dans le contexte fourni par le code. Un point lit un champ : {{app.nom}}. Une variable absente donne un texte vide, jamais une erreur.
+
+```rsh rsh.texte.2 "Afficher des valeurs"
+<title2>Bonjour {{utilisateur.prenom}}<!title2>
+<text>{{nb_messages}} nouveaux messages<!text>
+<image src="avatars/{{utilisateur.id}}.png"><!image>
+```
+
+Les variables marchent partout où il y a du texte : contenu, attributs, classes et identifiants.
+
+```rsh rsh.texte.3 "Classes et identifiants calculés"
+<for.tache in taches>
+    <container.tache.{{tache.etat}}>
+        <text>{{tache.titre}}<!text>
+        <button.x#retirer-{{tache_index}}>Retirer<!button>
+    <!container>
+<!for>
+```
+
+> astuce: Une valeur insérée par {{…}} n'est jamais relue comme du rsH : afficher un texte qui contient < ou {{ est sans danger.
+
+## Nombres et listes
+Un nombre entier s'affiche sans .0 ; une liste s'affiche séparée par des virgules ; un objet s'affiche vide (lire ses champs avec un point).

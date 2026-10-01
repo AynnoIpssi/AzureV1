@@ -1,0 +1,65 @@
+titre: azure-provider
+resume: Le superviseur : il lance les daemons et les tâches de fond, vérifie qu'ils répondent et les relance quand ils tombent.
+
+## Son rôle
+`azure_provider` est le premier processus d'Azure. Il garantit que tout ce qui doit tourner en arrière-plan tourne :
+
+- les **daemons d'Azure** : rooter, stockage, service, manager ;
+- les **tâches de fond** des apps (`[service]` du manifeste) ;
+- les services ajoutés dans `~/.config/azure/provider.conf`.
+
+Personne n'a besoin de le lancer à la main : `Provider::ensure("stockage")`, appelé par les apps et par la commande `azure`, démarre le provider s'il ne tourne pas, puis attend que le service demandé réponde. Au besoin, `azure autostart on` le démarre à l'ouverture de session (service systemd utilisateur).
+
+## Le superviseur
+Le cœur est `Supervisor::tick`, appelé toutes les 100 ms. Pour chaque service, il :
+
+- détecte un processus qui s'est arrêté ;
+- sonde son socket (toutes les 2 s ; 3 échecs d'affilée = mort) ;
+- décide de le relancer, selon sa règle et son historique.
+
+| État | Sens |
+|---|---|
+| Stopped | Pas lancé, ou arrêté à la main |
+| Starting | Lancé, attend que son socket réponde (10 s au plus) |
+| Running | Tourne et répond |
+| External | Répondait déjà avant d'être lancé par le provider (lancé à la main) : surveillé quand même |
+| Backoff | A planté, relance prévue après un délai |
+| Failed | A planté trop souvent : plus relancé jusqu'à un `start` explicite |
+
+Les décisions prennent l'heure en paramètre : les tests font avancer le temps sans attendre.
+
+## Les relances
+| Règle | Valeur |
+|---|---|
+| Délai après le 2e plantage | 1 s, doublé à chaque fois, 30 s au plus |
+| Abandon | 5 plantages en 60 s → Failed |
+| Arrêt | SIGTERM, puis SIGKILL après 3 s |
+| restart | always (daemons), on-failure, never (tâche qui se termine) |
+
+## Trouver les exécutables
+`find_binary` cherche, dans l'ordre : à côté de l'exécutable courant (et un dossier au-dessus, là où cargo range les binaires du workspace), puis dans `~/.local/share/azure/bin`, puis dans le `PATH`.
+
+> attention: Ne jamais copier les daemons à côté d'une app : ils y seraient trouvés en premier, et un second Azure démarrerait.
+
+## Le protocole
+| Opcode | Rôle |
+|---|---|
+| STATUS (0) | L'état de tous les services |
+| START, STOP, RESTART (1 à 3) | Piloter un service |
+| REGISTER, UNREGISTER (4, 5) | Une app ajoute ou retire une tâche de fond |
+| ENSURE (6) | Lancer si besoin et attendre qu'il soit prêt |
+| SHUTDOWN (7) | Tout arrêter |
+| DECLARE (8) | Faire connaître une tâche sans la lancer (lancée à la demande) |
+
+## En ligne de commande
+```sh fonctionnement.provider.1 "Piloter le provider"
+azure_provider status               # l'état de chaque service
+azure_provider restart stockage     # relancer un daemon
+azure_provider stop notes-sync
+azure_provider shutdown             # tout arrêter
+```
+
+Les journaux de chaque service sont dans `~/.local/state/azure/provider/<service>.log` ; le tableau de bord les affiche (page Journaux).
+
+## Tâches de fond installées
+`azure install` écrit les `[service]` d'une app dans `~/.local/share/azure/services/<app>.conf` : le provider les charge à son démarrage. Une tâche qui sert une méthode (`[provide] service = …`) est seulement **déclarée** : elle sera lancée au premier appel.
