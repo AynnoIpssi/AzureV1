@@ -396,3 +396,42 @@ fn inner_termination_stuck() {
         std::thread::sleep(std::time::Duration::from_secs(30));
     }
 }
+
+/// Permission `processus` (un moniteur) : l'app isolee voit les autres
+/// processus dans /proc, mais Landlock lui refuse tout signal hors d'elle.
+#[test]
+fn voir_les_processus_sans_pouvoir_les_viser() {
+    use std::os::unix::process::CommandExt;
+    if abi_version() < 6 {
+        eprintln!("Landlock ABI < 6 : la permission ne s'applique pas ici");
+        return;
+    }
+    let mut victim = Command::new("sleep").arg("30").spawn().unwrap();
+    let isolation = azure_core::security::isolation::Isolation::for_app(false).voir_processus(true);
+    let exe = std::env::current_exe().unwrap();
+    // Comme une app : le systeme et son propre dossier.
+    let pret = Sandbox::system().read(exe.parent().unwrap()).prepare().unwrap();
+    let mut cmd = Command::new(&exe);
+    cmd.args(["--exact", "inner_voir_processus", "--ignored", "--nocapture"]).env("VICTIM", victim.id().to_string());
+    // SAFETY : `enter` et `enforce` ne font que des appels systeme.
+    unsafe { cmd.pre_exec(move || isolation.enter().and_then(|_| pret.enforce())) };
+    let out = cmd.output().unwrap();
+    let alive = victim.try_wait().unwrap().is_none();
+    let _ = victim.kill();
+    let _ = victim.wait();
+    let text = String::from_utf8_lossy(&out.stdout).into_owned() + &String::from_utf8_lossy(&out.stderr);
+    assert!(out.status.success(), "{text}");
+    assert!(text.contains("RESULTAT pid-hote voit-la-victime signal-refuse"), "{text}");
+    assert!(alive, "le processus vise a survecu");
+}
+
+#[test]
+#[ignore]
+fn inner_voir_processus() {
+    let victim: i32 = std::env::var("VICTIM").unwrap().parse().unwrap();
+    // SAFETY : appels sans pointeur.
+    let pid = unsafe { libc::getpid() };
+    let voit = std::fs::read_to_string(format!("/proc/{victim}/stat")).is_ok_and(|s| s.contains("(sleep)"));
+    let s = unsafe { libc::kill(victim, libc::SIGTERM) } == 0;
+    println!("RESULTAT {} {} {}", if pid == 1 { "pid-1" } else { "pid-hote" }, if voit { "voit-la-victime" } else { "aveugle" }, if s { "signal-ENVOYE" } else { "signal-refuse" });
+}

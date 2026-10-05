@@ -128,6 +128,8 @@ fn button_id_at_base(nodes: &[UiNode], x: i32, y: i32, parent: (u32, u32, u32, u
 fn button_id_at_node(node: &UiNode, x: i32, y: i32, own_box: Rect) -> Option<String> {
     match node {
         UiNode::Button(button) if button.decoration.visible && contains(own_box, x, y) => Some(button.id.clone()).filter(|id| !id.is_empty()),
+        // Une toile ne dit que ses propres evenements (voir `click_controls`).
+        UiNode::Control(control) if control.kind == ControlKind::Toile => None,
         UiNode::Control(control) if control.kind.interactive() && contains(own_box, x, y) => Some(control.id.clone()).filter(|id| !id.is_empty()),
         UiNode::Container(container) => {
             let child_boxes = children_under(container, own_box, x, y)?;
@@ -186,6 +188,30 @@ pub struct ControlClick {
     pub consumed: bool,
 }
 
+/// La toile qui recoit la souris en `(x, y)` : celle sous le point, si rien
+/// n'est dessine par-dessus a cet endroit (barre d'outils flottante,
+/// panneau, champ...). L'ordre du parcours est celui du dessin : un element
+/// visite apres la toile et sous le point la recouvre.
+pub fn toile_sous(nodes: &[UiNode], x: i32, y: i32, parent: (u32, u32, u32, u32)) -> Option<String> {
+    let dans = |own: Rect, clip: Rect| contains(own, x, y) && contains(clip, x, y);
+    let mut toile: Option<String> = None;
+    let mut couverte = false;
+    super::tree::walk_with_paths(nodes, parent, &mut |n, own, clip, _| {
+        if !dans(own, clip) || !n.decoration().visible {
+            return;
+        }
+        match n {
+            UiNode::Control(c) if c.toile.is_some() => {
+                toile = Some(c.id.clone());
+                couverte = false;
+            }
+            _ if toile.is_some() => couverte = true,
+            _ => {}
+        }
+    });
+    toile.filter(|_| !couverte)
+}
+
 /// Un clic a `(x, y)` sur les champs : liste deroulante ouverte d'abord
 /// (choisir une ligne, ou la fermer), puis le champ sous le pointeur.
 pub fn click_controls(nodes: &mut [UiNode], x: i32, y: i32, parent: (u32, u32, u32, u32)) -> ControlClick {
@@ -215,10 +241,15 @@ pub fn click_controls(nodes: &mut [UiNode], x: i32, y: i32, parent: (u32, u32, u
     }
 
     // 2. Le champ sous le pointeur (dans la couche touchee seulement).
+    let toile_libre = toile_sous(nodes, x, y, parent);
     let mut radio: Option<(*const crate::ui::models::control::Control, String)> = None;
     at_point(nodes, x, y, parent, |slice| walk_mut(slice, parent, &mut |node, own_box| {
         let UiNode::Control(control) = node else { return false };
         if !control.kind.interactive() || control.disabled || !contains(own_box, x, y) {
+            return false;
+        }
+        // Une toile recouverte (barre flottante, panneau...) : pas pour elle.
+        if control.kind == ControlKind::Toile && toile_libre.as_deref() != Some(control.id.as_str()) {
             return false;
         }
         result.id = Some(control.id.clone()).filter(|id| !id.is_empty());
@@ -239,6 +270,16 @@ pub fn click_controls(nodes: &mut [UiNode], x: i32, y: i32, parent: (u32, u32, u
             ControlKind::Segmented => {
                 if let Some(i) = segments(control, own_box.2).iter().position(|(sx, sw)| (x as f32) >= own_box.0 as f32 + sx && (x as f32) < own_box.0 as f32 + sx + sw) {
                     control.selected = i;
+                }
+            }
+            ControlKind::Toile => {
+                if let Some(t) = control.toile.as_mut() {
+                    let evenement = t.appuyer(own_box, x, y, &crate::ui::models::toile::mesure_par_defaut);
+                    control.dragging = t.geste.is_some();
+                    // Un evenement des l'appui (double-clic) : il prend le clic,
+                    // sinon le bouton cherche ensuite (aucun) l'effacerait.
+                    result.consumed = evenement.is_some();
+                    result.id = evenement.map(|e| format!("{}@{e}", control.id));
                 }
             }
             ControlKind::Progress => {}
@@ -270,6 +311,80 @@ pub fn drag_slider(nodes: &mut [UiNode], x: i32, parent: (u32, u32, u32, u32)) -
         true
     });
     changed
+}
+
+/// Glisser sur une toile tenue (boite, vue, trait a relier).
+pub fn drag_toile(nodes: &mut [UiNode], x: i32, y: i32, parent: (u32, u32, u32, u32)) -> bool {
+    let mut changed = false;
+    walk_mut(nodes, parent, &mut |node, own_box| {
+        let UiNode::Control(control) = node else { return false };
+        let (true, Some(t)) = (control.dragging, control.toile.as_mut()) else { return false };
+        changed = t.glisser(own_box, x, y);
+        true
+    });
+    changed
+}
+
+/// Bouton relache sur une toile tenue : ce que l'app doit recevoir
+/// (`<id>@deplacer@...`, `<id>@choisir@...`, `<id>@relier@...`).
+pub fn release_toile(nodes: &mut [UiNode], x: i32, y: i32, parent: (u32, u32, u32, u32)) -> Option<String> {
+    let mut evenement = None;
+    walk_mut(nodes, parent, &mut |node, own_box| {
+        let UiNode::Control(control) = node else { return false };
+        let (true, Some(t)) = (control.dragging, control.toile.as_mut()) else { return false };
+        evenement = t.relacher(own_box, x, y, &crate::ui::models::toile::mesure_par_defaut).map(|e| format!("{}@{e}", control.id));
+        control.dragging = false;
+        true
+    });
+    evenement
+}
+
+/// La molette au-dessus d'une toile : sa vue bouge (Ctrl : zoom). `None` :
+/// pas de toile sous la souris (la page defile).
+pub fn scroll_toile(nodes: &mut [UiNode], x: i32, y: i32, delta: f64, ctrl: bool, maj: bool, parent: (u32, u32, u32, u32)) -> Option<bool> {
+    // Au-dessus d'un panneau flottant, c'est lui qui defile.
+    let libre = toile_sous(nodes, x, y, parent)?;
+    let mut fait = None;
+    walk_mut(nodes, parent, &mut |node, own_box| {
+        let UiNode::Control(control) = node else { return false };
+        let Some(t) = control.toile.as_mut() else { return false };
+        if !contains(own_box, x, y) || control.id != libre {
+            return false;
+        }
+        fait = Some(t.molette(own_box, x, y, delta, ctrl, maj));
+        true
+    });
+    fait
+}
+
+/// Garde la vue (decalage, zoom) des toiles quand l'ecran est reconstruit :
+/// une toile reprend celle de meme id de l'ecran d'avant.
+pub fn carry_toiles(old: &[UiNode], new: &mut [UiNode]) {
+    let mut vues = std::collections::HashMap::new();
+    fn lire<'a>(nodes: &'a [UiNode], vues: &mut std::collections::HashMap<&'a str, &'a crate::ui::models::toile::Toile>) {
+        for n in nodes {
+            match n {
+                UiNode::Control(c) if !c.id.is_empty() => {
+                    if let Some(t) = c.toile.as_deref() {
+                        vues.insert(c.id.as_str(), t);
+                    }
+                }
+                UiNode::Container(c) => lire(&c.children, vues),
+                _ => {}
+            }
+        }
+    }
+    lire(old, &mut vues);
+    if vues.is_empty() {
+        return;
+    }
+    for_each_mut(new, &mut |n| {
+        if let UiNode::Control(c) = n
+            && let (Some(t), Some(avant)) = (c.toile.as_mut(), vues.get(c.id.as_str()))
+        {
+            t.reprendre(avant);
+        }
+    });
 }
 
 /// Bouton de la souris relache : les boutons remontent, le glisser
@@ -319,4 +434,59 @@ pub fn tooltip_at(nodes: &[UiNode], x: i32, y: i32, parent: (u32, u32, u32, u32)
         }
     }
     found
+}
+
+/// Cadre les toiles qui l'attendent (nouvelle `vue`), maintenant que leur
+/// boite est connue. `true` : a redessiner.
+pub fn cadrer_toiles(nodes: &mut [UiNode], parent: (u32, u32, u32, u32)) -> bool {
+    let mut boites = std::collections::HashMap::new();
+    walk(nodes, parent, &mut |node, own_box| {
+        if let UiNode::Control(c) = node
+            && c.toile.as_deref().is_some_and(|t| t.a_cadrer)
+        {
+            boites.insert(c.id.clone(), own_box);
+        }
+    });
+    let mut fait = false;
+    if boites.is_empty() {
+        return false;
+    }
+    for_each_mut(nodes, &mut |n| {
+        if let UiNode::Control(c) = n
+            && let (Some(t), Some(b)) = (c.toile.as_mut(), boites.get(&c.id))
+            && b.2 > 0
+            && b.3 > 0
+        {
+            t.cadrer(*b, &crate::ui::models::toile::mesure_par_defaut);
+            t.a_cadrer = false;
+            fait = true;
+        }
+    });
+    fait
+}
+
+/// La souris bouge sans bouton : les toiles a `focus` suivent la boite
+/// survolee. `true` : a redessiner.
+pub fn survol_toile(nodes: &mut [UiNode], x: i32, y: i32, parent: (u32, u32, u32, u32)) -> bool {
+    fn a_focus(nodes: &[UiNode]) -> bool {
+        nodes.iter().any(|n| match n {
+            UiNode::Control(c) => c.toile.as_deref().is_some_and(|t| t.focus),
+            UiNode::Container(c) => a_focus(&c.children),
+            _ => false,
+        })
+    }
+    // Appele a chaque mouvement : sans toile a focus, aucune mise en page.
+    if !a_focus(nodes) {
+        return false;
+    }
+    let mut change = false;
+    walk_mut(nodes, parent, &mut |node, own_box| {
+        if let UiNode::Control(c) = node
+            && let Some(t) = c.toile.as_mut()
+        {
+            change |= t.survoler(own_box, x, y, &crate::ui::models::toile::mesure_par_defaut);
+        }
+        false
+    });
+    change
 }

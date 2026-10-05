@@ -8,7 +8,11 @@
 //   le socket Wayland et le dossier des daemons d'Azure ; X11
 //   (/tmp/.X11-unix) et le bus systeme (/run/dbus) sont masques ;
 // - espace de processus : l'app est le processus 1 de son espace, elle ne
-//   voit ni ne peut viser aucun autre processus (donc aucun signal) ;
+//   voit ni ne peut viser aucun autre processus (donc aucun signal). Une
+//   app qui a la permission de voir les processus (un moniteur) garde
+//   celui du systeme : elle lit /proc, mais Landlock (ABI >= 6) lui refuse
+//   tout signal hors d'elle ; sur un noyau plus ancien, la permission ne
+//   s'applique pas ;
 // - espace reseau (si l'app n'a pas le reseau) : ni TCP, ni sockets unix
 //   abstraits.
 //
@@ -27,6 +31,9 @@ pub struct Isolation {
     runtime: Option<CString>,
     /// Ce qui revient dans le dossier vide : (chemin, est un dossier).
     keep: Vec<(CString, bool)>,
+    /// Son propre espace de processus (sinon : celui du systeme, voir
+    /// `voir_processus`).
+    pids: bool,
     /// Dossiers masques par un dossier vide.
     hide: Vec<CString>,
 }
@@ -62,15 +69,29 @@ impl Isolation {
             gid_map: format!("{gid} {gid} 1\n").into_bytes(),
             runtime: runtime.as_deref().and_then(cstring),
             keep,
+            pids: true,
             hide,
         }
+    }
+
+    /// L'app voit les autres processus (permission `processus`) : pas
+    /// d'espace de processus a elle. Seulement si Landlock sait lui refuser
+    /// les signaux (ABI >= 6) ; sinon rien ne change.
+    pub fn voir_processus(mut self, oui: bool) -> Isolation {
+        if oui && crate::security::sandbox::abi_version() >= 6 {
+            self.pids = false;
+        }
+        self
     }
 
     /// A appeler dans `CommandExt::pre_exec` (processus fils, avant `exec`).
     /// Le processus lance devient le processus 1 d'un nouvel espace ; le fils
     /// du lanceur attend sa fin et sort avec le meme code.
     pub fn enter(&self) -> std::io::Result<()> {
-        let mut flags = libc::CLONE_NEWUSER | libc::CLONE_NEWNS | libc::CLONE_NEWPID;
+        let mut flags = libc::CLONE_NEWUSER | libc::CLONE_NEWNS;
+        if self.pids {
+            flags |= libc::CLONE_NEWPID;
+        }
         if !self.network {
             flags |= libc::CLONE_NEWNET;
         }
@@ -115,6 +136,9 @@ impl Isolation {
                 check(libc::mount(c"tmpfs".as_ptr(), dir.as_ptr(), c"tmpfs".as_ptr(), libc::MS_NOSUID | libc::MS_NODEV | libc::MS_NOEXEC, c"mode=0755".as_ptr().cast()))?;
             }
 
+            if !self.pids {
+                return Ok(());
+            }
             // Le nouvel espace de processus ne vaut que pour les enfants.
             let pid = libc::fork();
             if pid < 0 {

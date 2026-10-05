@@ -10,3 +10,6 @@ pub mod storage;
 pub mod provider;
 pub mod flux;
 pub mod app;
+pub mod perf;
+pub mod inspector;
+pub mod essai;

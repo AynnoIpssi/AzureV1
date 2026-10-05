@@ -26,9 +26,9 @@ pub fn walk(nodes: &[UiNode], parent: (u32, u32, u32, u32), f: &mut dyn FnMut(&U
 /// (indices des enfants depuis la racine) : l'ordre des chemins est l'ordre
 /// du document.
 /// `(noeud, boite, partie visible, chemin)`, voir `walk_with_paths`.
-pub(super) type PathVisitor<'a> = dyn FnMut(&UiNode, Rect, Rect, &[usize]) + 'a;
+pub(crate) type PathVisitor<'a> = dyn FnMut(&UiNode, Rect, Rect, &[usize]) + 'a;
 
-pub(super) fn walk_with_paths(nodes: &[UiNode], parent: (u32, u32, u32, u32), f: &mut PathVisitor) {
+pub(crate) fn walk_with_paths(nodes: &[UiNode], parent: (u32, u32, u32, u32), f: &mut PathVisitor) {
     fn visit(node: &UiNode, own_box: Rect, clip: Rect, path: &mut Vec<usize>, f: &mut PathVisitor) {
         f(node, own_box, clip, path);
         if let UiNode::Container(container) = node {

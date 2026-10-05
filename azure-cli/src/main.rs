@@ -1,6 +1,7 @@
 // azure : installer et lancer Azure et ses apps.
 //
 //   azure setup [--from <dossier>]      installe les daemons (defaut : dossier de cette commande)
+//   azure dossier [<chemin>]            dossier des apps (les apps ne vont pas dans les sources d'Azure)
 //   azure new <nom> [--titre <titre>] [--dans <dossier>] [--azure <sources>]
 //   azure build <dossier | nom> [--installer]
 //   azure install <dossier> [--bin <exe>]
@@ -46,6 +47,15 @@ fn run(args: &[String]) -> Result<(), String> {
                 println!("{note}");
             }
             println!("Ensuite : `azure autostart on` pour demarrer Azure a chaque connexion.");
+            Ok(())
+        }
+        ["dossier"] => {
+            println!("{}", azure_cli::new::apps_dir(&paths)?.display());
+            Ok(())
+        }
+        ["dossier", dir] => {
+            let dir = azure_cli::new::set_apps_dir(&paths, &PathBuf::from(dir))?;
+            println!("dossier des apps : {}", dir.display());
             Ok(())
         }
         ["new", name, ..] => {
@@ -109,6 +119,6 @@ fn run(args: &[String]) -> Result<(), String> {
             println!("{}", autostart::status(&paths));
             Ok(())
         }
-        _ => Err("usage : azure setup | new <nom> [--titre <titre>] [--dans <dossier>] | build <dossier|nom> [--installer] | install <dossier> [--bin <exe>] | uninstall <app> | list | run <app> | autostart on [--now]|off|status".to_string()),
+        _ => Err("usage : azure setup | dossier [<chemin>] | new <nom> [--titre <titre>] [--dans <dossier>] | build <dossier|nom> [--installer] | install <dossier> [--bin <exe>] | uninstall <app> | list | run <app> | autostart on [--now]|off|status".to_string()),
     }
 }

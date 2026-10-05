@@ -127,6 +127,83 @@ pub fn carry_scroll(old: &[UiNode], new: &mut [UiNode]) {
     }
 }
 
+/// Comme `carry_scroll`, en gardant en place ce qu'on lisait (« scroll
+/// anchoring » des navigateurs) : dans chaque zone qui defile, le premier
+/// element visible a id unique reste a la meme hauteur a l'ecran, meme si
+/// du contenu est apparu ou a disparu au-dessus (une liste qui grandit par
+/// le haut, un bloc qui change de taille). Une zone tout en haut n'est pas
+/// ancree : elle continue de montrer le haut. `parent` : la boite de la page.
+pub fn carry_scroll_anchored(old: &[UiNode], new: &mut [UiNode], parent: (u32, u32, u32, u32)) {
+    carry_scroll(old, new);
+
+    // Les noeuds de l'ancienne page : chemin, boite, partie visible, id.
+    struct Vu {
+        path: Vec<usize>,
+        own: Rect,
+        visible: Rect,
+        id: String,
+        scrolled: bool,
+    }
+    let survey = |nodes: &[UiNode]| {
+        let mut out = Vec::new();
+        super::tree::walk_with_paths(nodes, parent, &mut |n, own, visible, path| {
+            let scrolled = matches!(n, UiNode::Container(c) if c.scroll_offset > 0 || c.scroll_target > 0);
+            out.push(Vu { path: path.to_vec(), own, visible, id: n.decoration().anchor.clone(), scrolled });
+        });
+        out
+    };
+    let before = survey(old);
+    let after = survey(new);
+    let count = |list: &[Vu], zone: &[usize], id: &str| list.iter().filter(|v| v.path.starts_with(zone) && v.path.len() > zone.len() && v.id == id).count();
+
+    let mut shifts: Vec<(Vec<usize>, i32)> = Vec::new();
+    for zone in before.iter().filter(|v| v.scrolled) {
+        // Meme zone dans la nouvelle page, qui defile elle aussi.
+        if !after.iter().any(|v| v.path == zone.path && v.scrolled) {
+            continue;
+        }
+        // Une zone imbriquee dans une zone deja ancree suit sa parente.
+        if shifts.iter().any(|(p, _)| zone.path.starts_with(p)) {
+            continue;
+        }
+        let top = zone.visible.1;
+        let anchor = before.iter().filter(|v| {
+            v.path.starts_with(&zone.path) && v.path.len() > zone.path.len() && !v.id.is_empty()
+                && v.own.1 >= top && v.visible.3 > 0
+        });
+        for a in anchor {
+            if count(&before, &zone.path, &a.id) != 1 || count(&after, &zone.path, &a.id) != 1 {
+                continue;
+            }
+            let Some(b) = after.iter().find(|v| v.path.starts_with(&zone.path) && v.path.len() > zone.path.len() && v.id == a.id) else { continue };
+            let delta = b.own.1 - a.own.1;
+            if delta != 0 {
+                shifts.push((zone.path.clone(), delta));
+            }
+            break;
+        }
+    }
+    for (path, delta) in shifts {
+        if let Some(UiNode::Container(c)) = node_at_mut_opt(new, &path) {
+            let shift = |v: &mut u32| *v = (*v as i32 + delta).max(0) as u32;
+            shift(&mut c.scroll_offset);
+            shift(&mut c.scroll_target);
+        }
+    }
+}
+
+fn node_at_mut_opt<'a>(nodes: &'a mut [UiNode], path: &[usize]) -> Option<&'a mut UiNode> {
+    let (first, rest) = path.split_first()?;
+    let node = nodes.get_mut(*first)?;
+    if rest.is_empty() {
+        return Some(node);
+    }
+    match node {
+        UiNode::Container(c) => node_at_mut_opt(&mut c.children, rest),
+        _ => None,
+    }
+}
+
 /// A quel point deux noeuds se ressemblent : nombre de noeuds de meme
 /// sorte aux memes places dans leurs sous-arbres.
 fn likeness(a: &UiNode, b: &UiNode) -> usize {

@@ -23,7 +23,7 @@
 12. [Text layout correctness — baseline, side bearings, minimum spacing](#12-text-layout-correctness--baseline-side-bearings-minimum-spacing)
 13. [Stem darkening](#13-stem-darkening)
 14. [Rendering correctness — bugs found and fixed](#14-rendering-correctness--bugs-found-and-fixed)
-15. [Hinting — what it is, and why we're not implementing it](#15-hinting--what-it-is-and-why-were-not-implementing-it)
+15. [Hinting — vertical auto-hinting](#15-hinting--vertical-auto-hinting)
 16. [Test suite for text rendering](#16-test-suite-for-text-rendering)
 17. [Current capabilities and limitations](#17-current-capabilities-and-limitations)
 18. [What comes next](#18-what-comes-next)
@@ -442,7 +442,8 @@ Extracts a single character's outline from the font, at a given point size and a
 2. Apply the requested weight: `face.set_variation(Tag::from_bytes(b"wght"), weight)`. `ttf_parser` clamps out-of-range values to the font's actual axis min/max automatically, and applies any `avar` axis remapping the font defines. See [§11](#11-variable-font-weight-support) for how to discover a font's real axis range.
 3. Look up the glyph id for `character`.
 4. Walk the TTF outline commands (`move_to`, `line_to`, `quad_to`, `curve_to`, `close`) using a custom `OutlineBuilder`. Because the face already has the weight variation applied, the outline returned here is the *interpolated* (already-bold-or-thin) shape — `gvar` deltas are applied by `ttf_parser` transparently.
-5. Bezier curves are flattened via **recursive De Casteljau subdivision** with a flatness threshold of `0.5` font units — curves split until the maximum deviation of any control point from the chord is below this threshold (capped at 8 levels of recursion). This threshold is applied in raw font-design units (typically 0–1000 or 0–2048 per em), i.e. long before the final pixel scale is known, so in practice it always produces far more segments than a small on-screen glyph needs — safe, but not the most efficient possible choice.
+5. Bezier curves are flattened via **recursive De Casteljau subdivision** until every control point lies within `0.05` **pixel** of the chord (capped at 10 levels). The tolerance is set in pixels and converted to font units (`0.05 / scale`) before flattening, so a 10px glyph no longer gets hundreds of invisible segments, and a very large one still gets enough. Flattening happens in font units because the hinter (step 6b) works on them.
+6b. **Vertical auto-hinting** (on by default, see [§15](#15-hinting--vertical-auto-hinting)): the flattened outline is warped on the Y axis so baseline, x-height, cap-height and horizontal bars land on pixel boundaries; the glyph box is then whole pixels around the baseline.
 6. Compute `width`, `height`, `advance_width` (from `glyph_hor_advance`, which reflects `HVAR` deltas for the current weight), `descent` (from `-bbox.y_min`, clamped to ≥ 0), and `lsb` (from `bbox.x_min`), all scaled by `size / units_per_em`.
 7. Contour points are scaled and shifted so the origin sits at the glyph's own ink bounding-box minimum — i.e. contour space is `[0, width] × [0, height]`, **not** aligned to the font's baseline. The baseline offset is carried separately via `descent`/`lsb` so `draw_text` can position each glyph correctly relative to a shared baseline (see [§12](#12-text-layout-correctness--baseline-side-bearings-minimum-spacing)) without needing to touch the contour data itself.
 
@@ -660,7 +661,7 @@ This rule is intentionally an absolute pixel guarantee, not a proportional one: 
 
 ## 13. Stem darkening
 
-Without true font hinting (see [§15](#15-hinting--what-it-is-and-why-were-not-implementing-it)), thin strokes at small sizes only cover a small fraction of a pixel and rasterize as faint gray instead of a crisp line — most visible on thin weights (`wght` near 100) below ~14px. System text renderers compensate with **stem darkening**: artificially boosting low antialiasing-coverage values before blending, so thin strokes stay legible instead of fading out.
+Without hinting (see [§15](#15-hinting--vertical-auto-hinting) — now only vertical), thin strokes at small sizes only cover a small fraction of a pixel and rasterize as faint gray instead of a crisp line — most visible on thin weights (`wght` near 100) below ~14px. System text renderers compensate with **stem darkening**: artificially boosting low antialiasing-coverage values before blending, so thin strokes stay legible instead of fading out.
 
 The engine's version is a coverage remap applied right before the coverage becomes the blend alpha, in `draw_glyph`:
 
@@ -750,23 +751,19 @@ Not a bug fix — an experiment, kept here because it's useful negative informat
 
 ---
 
-## 15. Hinting — what it is, and why we're not implementing it
+## 15. Hinting — vertical auto-hinting
 
-"Hinting" (a.k.a. grid-fitting) is the general term for adjusting a glyph's outline, at rasterization time, so its important features — stem widths, baseline, x-height, cap-height — land on exact pixel boundaries instead of wherever the raw scaled outline happens to fall. It's why system-rendered small text (in a browser, an IDE, a terminal) looks crisper than a naive scale-and-rasterize of the same outline, which is what this engine currently does.
+"Hinting" (grid-fitting) adjusts a glyph's outline at rasterization time so its important features land on pixel boundaries instead of straddling two rows (which renders them as two gray rows). Bytecode hinting (a TrueType VM running `fpgm`/`prep` programs) is still out of scope; an **autohinter** is implemented in `src/rendering/services/text/hinting.rs`, on the **Y axis only** — the same choice as FreeType's "slight" mode, the Linux desktop default: advances and letter spacing are untouched, so text never changes width.
 
-There are two distinct mechanisms in real-world font renderers (FreeType, DirectWrite, CoreText), of very different scope:
+1. **Blue zones** — reference heights read from witness glyphs (`H`/`x` bottom = baseline, `p` = descender, `x` = x-height, `H` = cap-height, `l` = ascender) with their overshoots (`o`, `O`). Each is rounded to the pixel; an overshoot under half a pixel is suppressed so `o` is not one pixel taller than `x`. Cached per (font, scale, weight).
+2. **Segments** — runs of nearly horizontal edges (slope ≤ 0.2) of the flattened outline that are a local extremum in Y, with the side the ink is on (from contour orientation).
+3. **Edges** — segments at the same height merged (both feet of `H` form one edge).
+4. **Fitting** — an edge inside a blue zone snaps to it; a bottom edge facing a top edge (overlapping in X) forms a horizontal **stem**, whose thickness is rounded (1px minimum) and then placed on the grid, anchored to a blue edge if it has one.
+5. **Warp** — every point is moved by linear interpolation between the fitted edges around it. The mapping is non-decreasing, so the outline never folds over itself.
 
-**TrueType bytecode instructions** — some fonts embed literal programs (`fpgm`/`prep`/per-glyph instructions) that a virtual machine executes at rasterization time to hint that specific font's specific glyphs. Implementing this means implementing a full instruction-set interpreter (~dozens of opcodes, a "twilight zone" concept, storage/control-value tables). Out of scope: it's a large, self-contained subsystem, and many modern webfonts (including both fonts shipped here) don't ship meaningful bytecode instructions anyway — they rely on the next mechanism instead.
+`glyph::set_hinting(false)` turns it off (per thread, part of the glyph cache key) to compare; `tests/text_hinting_compare.rs` renders both side by side. The earlier crude "round every point" experiment ([§14.7](#147-crude-coordinate-snapping--tried-rejected)) stays rejected: it snapped curves too, which is what distorted them.
 
-**Autohinting** — analyzes *any* outline geometrically (no embedded instructions required): detect stem segments, establish "blue zones" from reference letters (`o`, `H`, `x`, etc.) for baseline/x-height/cap-height alignment, then warp the outline so those features snap to the pixel grid, consistently across the whole glyph. This is the mechanism that would actually help our two variable fonts. It's also a multi-thousand-line subsystem in FreeType (`aflatin.c`, `afhints.c`, `afglobal.c`, ...) — a multi-week undertaking with high risk of subtle, hard-to-debug visual regressions if attempted incrementally.
-
-A **crude approximation** (round every already-scaled contour point to the pixel grid, no stem detection) was tried as a bounded experiment and rejected — see [§14.7](#147-crude-coordinate-snapping--tried-rejected). It reliably made small/thin text *worse*, not better.
-
-**Where things stand:** real hinting is left as future work (a good candidate for a from-scratch, deliberately scoped implementation — the smallest useful slice is probably just blue-zone baseline/x-height snapping, without full stem detection). In the meantime, [stem darkening](#13-stem-darkening) covers the specific "thin strokes fade to gray" symptom cheaply, and the [minimum pixel gap](#123-minimum-pixel-gap-enforcement) covers the "letters touch" symptom — between the two, small-size legibility is significantly better than an unmitigated scale-and-rasterize, without taking on hinting's implementation risk.
-
-If revisited, **FreeType** itself (LGPL/FTL-licensed, the reference implementation used by effectively all of Linux) is the natural reference to study — but pulling it in as a dependency (vs. reading its algorithms and reimplementing them) would mean FFI to a C library, which conflicts with this engine's from-scratch, minimal-dependency approach (see [§1](#1-what-is-azure-engine)).
-
-> **Planned:** the project owner intends to implement this — the real autohinting algorithm, done properly (stem detection, blue zones, coherent outline warping) — by hand, as a deliberate personal challenge, rather than adopting FreeType or leaving it unimplemented. Not scheduled yet; noted here so the intent isn't lost.
+Not done yet (possible next steps): horizontal (X-axis) stem fitting, which changes glyph widths; serif edges; per-script blue zones (only Latin witnesses are used).
 
 ---
 
@@ -817,7 +814,7 @@ The headless (`.ppm`-writing) tests exist specifically because, at one point dur
   - `draw_text` — high-quality **variable-font-aware** TTF text rendering: nonzero-winding fill, gamma-correct AA, shared baseline with correct descenders, corrected side bearings, guaranteed minimum inter-glyph pixel gap, and stem darkening for small/thin legibility
 
 **Current limitations:**
-- No real font hinting (see [§15](#15-hinting--what-it-is-and-why-were-not-implementing-it)) — stem darkening and minimum-gap enforcement mitigate the worst symptoms but don't replace true grid-fitting
+- Hinting is vertical only (see [§15](#15-hinting--vertical-auto-hinting)) — vertical stems are not fitted on X; stem darkening and minimum-gap enforcement cover that side
 - No pair kerning (GPOS/kern table) — `text/kerning.rs` currently only returns the glyph's own advance width
 - `draw_text` re-parses the whole font face **per character** (via `exctract_glyph` → `load_font`/`Face::parse`) rather than once per call — correctness is unaffected but this is wasted work on longer strings
 - Width axis (`wdth`) on Roboto is not exposed by `draw_text` — only `wght` is settable
@@ -837,7 +834,7 @@ The headless (`.ppm`-writing) tests exist specifically because, at one point dur
 - Recreate shared memory and buffer on `WindowResize` event
 
 **Text rendering:**
-- Real hinting, scoped down to blue-zone baseline/x-height snapping first (see [§15](#15-hinting--what-it-is-and-why-were-not-implementing-it))
+- Horizontal (X-axis) stem fitting, on top of the vertical autohinter (see [§15](#15-hinting--vertical-auto-hinting))
 - Pair kerning (GPOS)
 - Cache parsed `ttf_parser::Face` per `(font_path, weight)` instead of re-parsing per character
 

@@ -1,5 +1,0 @@
-Maquettes d'ecran des projets de la page Projets (rsH + rsC), dessinees par
-le moteur d'Azure. Pour regenerer les images :
-  cargo test -p azure-portfolio --test maquettes -- --ignored
-puis convertir target/tmp/maquette-<nom>.ppm en ui/images/<nom>.png (PNG
-RGB 8 bits).

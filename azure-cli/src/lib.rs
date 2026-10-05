@@ -9,6 +9,9 @@
 // ~/.config/systemd/user/azure-provider.service     demarrage a la connexion
 // ~/.local/bin/azure                       lien vers bin/azure (dans le PATH)
 // ~/.local/share/azure/source              sources d'Azure (pour `azure new`)
+// ~/.local/share/azure/dossier-apps        dossier des apps (`azure dossier`) : les
+//                                          sources des apps, jamais dans celles d'Azure
+// ~/.cache/azure/target/                   compilation partagee des apps
 // ```
 pub mod autostart;
 pub mod build;

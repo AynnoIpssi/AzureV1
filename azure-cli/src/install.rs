@@ -12,8 +12,9 @@ pub struct Installed {
     pub title: String,
     pub version: String,
     pub exe: PathBuf,
-    /// Permission reseau du manifeste installe.
+    /// Permissions reseau et processus du manifeste installe.
     pub network: bool,
+    pub processes: bool,
 }
 
 /// Comment joindre azure-manager pendant l'installation.
@@ -26,16 +27,37 @@ pub enum ManagerAccess {
     None,
 }
 
+/// Le `target-dir` du `.cargo/config.toml` d'une app (ecrit par `azure
+/// new`), sinon `$CARGO_TARGET_DIR`.
+fn configured_target(dir: &Path) -> Option<PathBuf> {
+    let config = std::fs::read_to_string(dir.join(".cargo/config.toml")).ok();
+    let from_config = config.and_then(|text| {
+        text.lines().find_map(|line| {
+            let value = line.trim().strip_prefix("target-dir")?.trim_start().strip_prefix('=')?;
+            Some(value.trim().trim_matches('"').to_string())
+        })
+    });
+    let target = from_config.or_else(|| std::env::var("CARGO_TARGET_DIR").ok().filter(|t| !t.is_empty()))?;
+    let target = PathBuf::from(target);
+    Some(if target.is_absolute() { target } else { dir.join(target) })
+}
+
 /// Cherche le binaire `exec` d'une app dont le manifeste est dans `dir` :
-/// dans `dir`, puis dans `target/release` et `target/debug` d'un dossier
-/// parent (projet cargo).
+/// dans `dir`, puis dans le `target-dir` de l'app (`.cargo/config.toml`,
+/// voir `azure new`), puis dans `target/release` et `target/debug` d'un
+/// dossier parent (projet cargo). Le `target-dir` passe avant : c'est la
+/// que cargo compile l'app, un `target` voisin peut etre perime.
 pub fn find_app_binary(dir: &Path, exec: &str) -> Option<PathBuf> {
     let direct = dir.join(exec);
     if direct.is_file() {
         return Some(direct);
     }
     let dir = dir.canonicalize().ok()?;
-    dir.ancestors().flat_map(|d| [d.join("target/release").join(exec), d.join("target/debug").join(exec)]).find(|p| p.is_file())
+    let configured = configured_target(&dir).into_iter();
+    configured
+        .chain(dir.ancestors().map(|d| d.join("target")))
+        .flat_map(|target| [target.join("release").join(exec), target.join("debug").join(exec)])
+        .find(|p| p.is_file())
 }
 
 /// Installe l'app dont le manifeste est `<source>/app.azure`. `binary` :
@@ -75,7 +97,7 @@ pub fn install(paths: &Paths, source: &Path, binary: Option<&Path>, manager: Man
     std::fs::rename(&staging, &target).map_err(|e| format!("{} : {e}", target.display()))?;
 
     let exe = target.join(&exec);
-    let installed = Installed { name: manifest.name.clone(), title: manifest.title.clone(), version: manifest.version.clone(), exe: exe.clone(), network: manifest.permissions.network };
+    let installed = Installed { name: manifest.name.clone(), title: manifest.title.clone(), version: manifest.version.clone(), exe: exe.clone(), network: manifest.permissions.network, processes: manifest.permissions.processes };
     let icon = manifest.icon.as_ref().and_then(|icon| icon.strip_prefix(&manifest.dir).ok()).map(|relative| target.join(relative));
     write_desktop(paths, &installed, icon.as_deref())?;
 
@@ -209,7 +231,7 @@ pub fn list(paths: &Paths) -> Vec<Installed> {
             let dir = entry.path();
             let manifest = Manifest::load(&dir.join("app.azure")).ok()?;
             let exe = dir.join(manifest.exec.as_deref()?);
-            Some(Installed { name: manifest.name, title: manifest.title, version: manifest.version, exe, network: manifest.permissions.network })
+            Some(Installed { name: manifest.name, title: manifest.title, version: manifest.version, exe, network: manifest.permissions.network, processes: manifest.permissions.processes })
         })
         .collect();
     apps.sort_by(|a, b| a.name.cmp(&b.name));
@@ -235,7 +257,7 @@ pub fn run(paths: &Paths, name: &str, args: &[String]) -> Result<u32, String> {
         let mut command = std::process::Command::new(&app.exe);
         command.args(args).current_dir(app.exe.parent().unwrap_or(Path::new("/"))).stdin(std::process::Stdio::null()).stdout(log.try_clone()?).stderr(err.try_clone()?);
         // Espaces de noms en plus de Landlock (voir azure_core::security::isolation).
-        let isolation = isolated.then(|| azure_core::security::isolation::Isolation::for_app(app.network));
+        let isolation = isolated.then(|| azure_core::security::isolation::Isolation::for_app(app.network).voir_processus(app.processes));
         // SAFETY : `setsid` et `enter` ne font que des appels systeme.
         unsafe {
             command.pre_exec(move || {

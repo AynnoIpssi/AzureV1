@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 /// Le dossier de l'app : `target` s'il contient app.azure, sinon
-/// `azure-<nom>` dans les sources d'Azure (voir `azure new`).
+/// `azure-<nom>` dans le dossier des apps (voir `azure dossier`).
 pub fn app_dir(paths: &Paths, target: &str) -> Result<PathBuf, String> {
     let dir = PathBuf::from(target);
     if dir.join("app.azure").is_file() {
@@ -15,8 +15,8 @@ pub fn app_dir(paths: &Paths, target: &str) -> Result<PathBuf, String> {
     if target.contains('/') {
         return Err(format!("{target} : pas de app.azure ici"));
     }
-    let source = crate::new::azure_source(paths, None)?;
-    let dir = source.join(format!("azure-{}", target.strip_prefix("azure-").unwrap_or(target)));
+    let apps = crate::new::apps_dir(paths)?;
+    let dir = apps.join(format!("azure-{}", target.strip_prefix("azure-").unwrap_or(target)));
     if dir.join("app.azure").is_file() { Ok(dir) } else { Err(format!("'{target}' : ni un dossier d'app, ni {}", dir.display())) }
 }
 

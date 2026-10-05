@@ -59,13 +59,16 @@ pub struct AppSockets {
 
 impl Default for AppSockets {
     fn default() -> AppSockets {
+        // Un essai (voir `crate::essai`) : les daemons de son Azure jetable
+        // tournent deja (`AZURE_RUNTIME_DIR`), rien a lancer ni a enfermer.
+        let essai = std::env::var_os("AZURE_ESSAI").is_some();
         AppSockets {
             manager: azure_manager::SOCKET_PATH.to_string(),
             service: azure_service::SOCKET_PATH.to_string(),
             stockage: azure_stockage::SOCKET_PATH.to_string(),
             router: azure_rooter::SOCKET_PATH.to_string(),
-            provider: true,
-            sandbox: true,
+            provider: !essai,
+            sandbox: !essai,
         }
     }
 }
@@ -136,6 +139,8 @@ impl AzureApp {
 
     pub fn from_manifest_at(path: impl AsRef<Path>, sockets: AppSockets) -> Result<AzureApp, String> {
         let manifest = Manifest::load(path.as_ref())?;
+        // Ses fonctionnalites sont publiees sous ce nom (voir `perf`).
+        crate::perf::nommer(&manifest.name);
         if sockets.sandbox {
             reexec_isolated(&manifest, sockets.provider);
         }
@@ -540,7 +545,7 @@ fn reexec_isolated(manifest: &Manifest, provider: bool) {
         }
     }
     let Ok(exe) = std::env::current_exe() else { return };
-    let isolation = azure_core::security::isolation::Isolation::for_app(manifest.permissions.network);
+    let isolation = azure_core::security::isolation::Isolation::for_app(manifest.permissions.network).voir_processus(manifest.permissions.processes);
     let mut command = std::process::Command::new(exe);
     command.args(std::env::args_os().skip(1)).env("AZURE_ISOLATION_TENTEE", "1");
     // SAFETY : `enter` ne fait que des appels systeme.

@@ -47,6 +47,11 @@ pub fn handle_event(state: &mut EventState, event: WindowEvent, layout: Keyboard
         WindowEvent::WindowMouseButton(button, true) if button == BTN_LEFT => handle_mouse_down(state, content),
         WindowEvent::WindowMouseButton(button, true) if button == BTN_RIGHT => open_format_menu(state, content),
         WindowEvent::WindowMouseButton(button, false) if button == BTN_LEFT => {
+            // Une toile tenue : son geste finit, l'app recoit son resultat.
+            if let Some(evenement) = interact::release_toile(&mut state.ui_nodes, state.mouse_x, state.mouse_y, content) {
+                state.clicked_id = Some(evenement);
+                state.activated = true;
+            }
             state.dragging = false;
             state.scroll_drag = None;
             let dropped = finish_drag(state);
@@ -54,12 +59,31 @@ pub fn handle_event(state: &mut EventState, event: WindowEvent, layout: Keyboard
         }
         // La page defile : le menu `/` ne suivrait plus son curseur.
         WindowEvent::WindowScroll(_) if state.command_menu.take().is_some() => true,
+        // Au-dessus d'une toile : sa vue bouge (Ctrl : zoom), pas la page.
+        WindowEvent::WindowScroll(delta)
+            if {
+                let (ctrl, maj) = (state.ctrl_held(), state.shift_held());
+                interact::scroll_toile(&mut state.ui_nodes, state.mouse_x, state.mouse_y, delta, ctrl, maj, content).is_some()
+            } =>
+        {
+            true
+        }
         // Maj + molette : defilement horizontal, comme dans un navigateur.
         WindowEvent::WindowScroll(delta) if state.shift_held() => {
             interact::scroll_x_at(&mut state.ui_nodes, state.mouse_x, state.mouse_y, delta, content)
         }
         WindowEvent::WindowScroll(delta) => {
             interact::scroll_at(&mut state.ui_nodes, state.mouse_x, state.mouse_y, delta, content)
+        }
+        // Pave tactile vers la gauche ou la droite au-dessus d'une toile : sa
+        // vue glisse de cote.
+        WindowEvent::WindowScrollH(delta)
+            if {
+                let ctrl = state.ctrl_held();
+                interact::scroll_toile(&mut state.ui_nodes, state.mouse_x, state.mouse_y, delta, ctrl, true, content).is_some()
+            } =>
+        {
+            true
         }
         WindowEvent::WindowScrollH(delta) => {
             interact::scroll_x_at(&mut state.ui_nodes, state.mouse_x, state.mouse_y, delta, content)
@@ -87,14 +111,23 @@ pub fn handle_tick(state: &mut EventState, layout: KeyboardLayout, content: (u32
     // le contenu bouge sous une souris immobile, donc ce qu'elle survole
     // (la forme du curseur) doit etre recalcule.
     let mut changed = interact::animate_scroll(&mut state.ui_nodes);
+    // Une toile a une nouvelle vue : cadree sur son dessin.
+    changed |= interact::cadrer_toiles(&mut state.ui_nodes, content);
 
     // Infobulle : apres un instant sans bouger au-dessus d'un element qui en
-    // a une.
-    if state.tooltip.is_none() && state.still_since.elapsed() >= TOOLTIP_DELAY
-        && let Some(text) = interact::tooltip_at(&state.ui_nodes, state.mouse_x, state.mouse_y, content) {
+    // a une. Cherchee une seule fois par pause de la souris (et de nouveau
+    // si le contenu a defile dessous) : sinon toute la mise en page serait
+    // refaite a chaque tic tant que la souris ne bouge pas.
+    if changed {
+        state.tooltip_sought = false;
+    }
+    if state.tooltip.is_none() && !state.tooltip_sought && state.still_since.elapsed() >= TOOLTIP_DELAY {
+        state.tooltip_sought = true;
+        if let Some(text) = interact::tooltip_at(&state.ui_nodes, state.mouse_x, state.mouse_y, content) {
             state.tooltip = Some((text, state.mouse_x, state.mouse_y));
             changed = true;
         }
+    }
     if changed {
         state.hover = interact::hover_kind_at(&state.ui_nodes, state.mouse_x, state.mouse_y, content);
     }
@@ -198,14 +231,15 @@ fn pick_command(state: &mut EventState) -> bool {
 }
 
 /// Apres une touche : le menu `/` suit ce qui est tape apres le `/`, et se
-/// ferme si le curseur en sort, si le `/` est efface, ou si un espace suit
-/// une recherche sans resultat.
+/// ferme si le curseur en sort, si le `/` est efface, si un espace suit
+/// une recherche sans resultat, ou si c'est un espace ou un autre `/` qui
+/// suit le `/` (une division, un commentaire `//` : pas une commande).
 fn refresh_command_menu(state: &mut EventState) {
     let Some(menu) = &mut state.command_menu else { return };
     let keep = match interact::focused_area_info(&state.ui_nodes) {
         Some(f) if f.id == menu.area && f.cursor > menu.start && f.text.chars().nth(menu.start) == Some('/') => {
             let q: String = f.text.chars().skip(menu.start + 1).take(f.cursor - menu.start - 1).collect();
-            if q.contains('\n') || q.chars().count() > 30 {
+            if q.contains('\n') || q.chars().count() > 30 || q.starts_with([' ', '/']) {
                 false
             } else {
                 menu.filter(&q);
@@ -223,6 +257,7 @@ fn handle_mouse_move(state: &mut EventState, x: i32, y: i32, content: (u32, u32,
     state.mouse_x = x;
     state.mouse_y = y;
     state.still_since = Instant::now();
+    state.tooltip_sought = false;
     // Le panneau de mise en forme et le menu `/` suivent le survol.
     if state.format_menu.is_some() || state.command_menu.as_ref().is_some_and(|m| contains_rect(m.rect(), x, y)) {
         return true;
@@ -274,6 +309,14 @@ fn handle_mouse_move(state: &mut EventState, x: i32, y: i32, content: (u32, u32,
 
     // Curseur (slider) tenu : suit la souris.
     if state.dragging && interact::drag_slider(&mut state.ui_nodes, x, content) {
+        changed = true;
+    }
+    // Toile tenue : la boite, la vue ou le trait suivent.
+    if state.dragging && interact::drag_toile(&mut state.ui_nodes, x, y, content) {
+        changed = true;
+    }
+    // Sans bouton : la boite survolee d'une toile a focus ressort.
+    if !state.dragging && interact::survol_toile(&mut state.ui_nodes, x, y, content) {
         changed = true;
     }
 

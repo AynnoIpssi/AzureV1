@@ -1,23 +1,47 @@
 use crate::rendering::models::glyph::Glyph;
 
-const FLATNESS: f32 = 0.5;
-const MAX_DEPTH: u32 = 8;
+use crate::rendering::services::text::hinting;
+
+// Ecart maximal (en PIXELS) entre une courbe et les segments qui la
+// remplacent. Avant, ce seuil etait de 0.5 unite de police, quelle que soit
+// la taille : des centaines de segments invisibles pour un glyphe de 10px
+// (une unite y vaut ~0.005px), et a l'inverse trop peu au-dela de ~400px.
+const FLATNESS_PX: f32 = 0.05;
+const MAX_DEPTH: u32 = 10;
 
 struct GlyphOutline {
     contours: Vec<Vec<(f32, f32)>>,
     current: Vec<(f32, f32)>,
+    // `FLATNESS_PX` ramene en unites de police (l'outline est aplatie avant
+    // la mise a l'echelle, pour que le hinting travaille sur ces unites).
+    flatness: f32,
 }
 
 impl GlyphOutline {
-    pub fn new() -> GlyphOutline {
+    pub fn new(flatness: f32) -> GlyphOutline {
         GlyphOutline {
             contours: Vec::new(),
             current: Vec::new(),
+            flatness,
         }
     }
 }
 
-fn subdivide_quad(out: &mut Vec<(f32, f32)>, p0: (f32, f32), p1: (f32, f32), p2: (f32, f32), depth: u32) {
+// Activer/desactiver l'auto-hinting vertical (voir `hinting`) - actif par
+// defaut ; le couper sert a comparer les deux rendus.
+thread_local! {
+    static HINTING: std::cell::Cell<bool> = const { std::cell::Cell::new(true) };
+}
+
+pub fn set_hinting(enabled: bool) {
+    HINTING.with(|h| h.set(enabled));
+}
+
+pub fn hinting_enabled() -> bool {
+    HINTING.with(|h| h.get())
+}
+
+fn subdivide_quad(out: &mut Vec<(f32, f32)>, p0: (f32, f32), p1: (f32, f32), p2: (f32, f32), flatness: f32, depth: u32) {
     let dx = p2.0 - p0.0;
     let dy = p2.1 - p0.1;
     let len_sq = dx * dx + dy * dy;
@@ -29,18 +53,19 @@ fn subdivide_quad(out: &mut Vec<(f32, f32)>, p0: (f32, f32), p1: (f32, f32), p2:
         ((p1.0 - p0.0) * dy - (p1.1 - p0.1) * dx).abs() / len_sq.sqrt()
     };
 
-    if depth >= MAX_DEPTH || d < FLATNESS {
+    if depth >= MAX_DEPTH || d < flatness {
         out.push(p2);
         return;
     }
     let m01 = ((p0.0 + p1.0) * 0.5, (p0.1 + p1.1) * 0.5);
     let m12 = ((p1.0 + p2.0) * 0.5, (p1.1 + p2.1) * 0.5);
     let mid = ((m01.0 + m12.0) * 0.5, (m01.1 + m12.1) * 0.5);
-    subdivide_quad(out, p0, m01, mid, depth + 1);
-    subdivide_quad(out, mid, m12, p2, depth + 1);
+    subdivide_quad(out, p0, m01, mid, flatness, depth + 1);
+    subdivide_quad(out, mid, m12, p2, flatness, depth + 1);
 }
 
-fn subdivide_cubic(out: &mut Vec<(f32, f32)>, p0: (f32, f32), p1: (f32, f32), p2: (f32, f32), p3: (f32, f32), depth: u32) {
+#[allow(clippy::too_many_arguments)]
+fn subdivide_cubic(out: &mut Vec<(f32, f32)>, p0: (f32, f32), p1: (f32, f32), p2: (f32, f32), p3: (f32, f32), flatness: f32, depth: u32) {
     let dx = p3.0 - p0.0;
     let dy = p3.1 - p0.1;
     let len_sq = dx * dx + dy * dy;
@@ -56,7 +81,9 @@ fn subdivide_cubic(out: &mut Vec<(f32, f32)>, p0: (f32, f32), p1: (f32, f32), p2
         )
     };
 
-    if depth >= MAX_DEPTH || d1 + d2 < FLATNESS {
+    // Le segment [p0, p3] s'ecarte au plus de 3/4 de max(d1, d2) de la
+    // cubique : d1 + d2 < flatness garantit donc bien l'ecart voulu.
+    if depth >= MAX_DEPTH || d1 + d2 < flatness {
         out.push(p3);
         return;
     }
@@ -66,8 +93,8 @@ fn subdivide_cubic(out: &mut Vec<(f32, f32)>, p0: (f32, f32), p1: (f32, f32), p2
     let m012 = ((m01.0 + m12.0) * 0.5, (m01.1 + m12.1) * 0.5);
     let m123 = ((m12.0 + m23.0) * 0.5, (m12.1 + m23.1) * 0.5);
     let mid  = ((m012.0 + m123.0) * 0.5, (m012.1 + m123.1) * 0.5);
-    subdivide_cubic(out, p0, m01, m012, mid, depth + 1);
-    subdivide_cubic(out, mid, m123, m23, p3, depth + 1);
+    subdivide_cubic(out, p0, m01, m012, mid, flatness, depth + 1);
+    subdivide_cubic(out, mid, m123, m23, p3, flatness, depth + 1);
 }
 
 impl ttf_parser::OutlineBuilder for GlyphOutline {
@@ -85,12 +112,12 @@ impl ttf_parser::OutlineBuilder for GlyphOutline {
 
     fn quad_to(&mut self, x1: f32, y1: f32, x: f32, y: f32) {
         let p0 = *self.current.last().unwrap_or(&(0.0, 0.0));
-        subdivide_quad(&mut self.current, p0, (x1, y1), (x, y), 0);
+        subdivide_quad(&mut self.current, p0, (x1, y1), (x, y), self.flatness, 0);
     }
 
     fn curve_to(&mut self, x1: f32, y1: f32, x2: f32, y2: f32, x: f32, y: f32) {
         let p0 = *self.current.last().unwrap_or(&(0.0, 0.0));
-        subdivide_cubic(&mut self.current, p0, (x1, y1), (x2, y2), (x, y), 0);
+        subdivide_cubic(&mut self.current, p0, (x1, y1), (x2, y2), (x, y), self.flatness, 0);
     }
 
     fn close(&mut self) {
@@ -120,8 +147,11 @@ pub fn exctract_glyph(font_data: &[u8], character: char, size: f32, weight: f32)
 // qu'une seule police est chargee dans le processus (le seul cas reel
 // aujourd'hui, `FONT_PATH` est une constante unique cote azure_foundation),
 // mais a revoir si plusieurs polices distinctes doivent un jour coexister.
+// (police, caractere, taille, poids, hinting) -> glyphe.
+type GlyphCache = std::collections::HashMap<(usize, char, u32, u32, bool), Glyph>;
+
 thread_local! {
-    static GLYPH_CACHE: std::cell::RefCell<std::collections::HashMap<(usize, char, u32, u32), Glyph>> =
+    static GLYPH_CACHE: std::cell::RefCell<GlyphCache> =
         std::cell::RefCell::new(std::collections::HashMap::new());
 }
 
@@ -135,7 +165,8 @@ thread_local! {
 /// pour chaque caractere - qui elle-meme sert le resultat depuis
 /// `GLYPH_CACHE` quand ce caractere/taille/poids a deja ete extrait.
 pub fn extract_glyph_from_face(face: &mut ttf_parser::Face, character: char, size: f32, weight: f32) -> Result<Glyph, String> {
-    extract_glyph_for_font(face, 0, character, size, weight)
+    let font_key = face.raw_face().data.as_ptr() as usize;
+    extract_glyph_for_font(face, font_key, character, size, weight)
 }
 
 /// Comme `extract_glyph_from_face`, pour une police identifiee par
@@ -143,7 +174,7 @@ pub fn extract_glyph_from_face(face: &mut ttf_parser::Face, character: char, siz
 /// `loader::load_font`) : plusieurs polices peuvent ainsi coexister dans le
 /// cache sans que leurs glyphes se melangent.
 pub fn extract_glyph_for_font(face: &mut ttf_parser::Face, font_key: usize, character: char, size: f32, weight: f32) -> Result<Glyph, String> {
-    let key = (font_key, character, size.to_bits(), weight.to_bits());
+    let key = (font_key, character, size.to_bits(), weight.to_bits(), hinting_enabled());
     if let Some(cached) = GLYPH_CACHE.with(|cache| cache.borrow().get(&key).cloned()) {
         return Ok(cached);
     }
@@ -157,7 +188,8 @@ fn extract_glyph_uncached(face: &mut ttf_parser::Face, character: char, size: f3
     face.set_variation(ttf_parser::Tag::from_bytes(b"wght"), weight);
     let glyph_id = face.glyph_index(character).ok_or("Glyph not found")?;
 
-    let mut outline = GlyphOutline::new();
+    let scale = size / face.units_per_em() as f32;
+    let mut outline = GlyphOutline::new(FLATNESS_PX / scale);
     face.outline_glyph(glyph_id, &mut outline);
 
     if !outline.current.is_empty() {
@@ -176,7 +208,6 @@ fn extract_glyph_uncached(face: &mut ttf_parser::Face, character: char, size: f3
     )),
     };
 
-    let scale = size / face.units_per_em() as f32;
     let width = (bbox.x_max - bbox.x_min) as f32 * scale;
     let height = (bbox.y_max - bbox.y_min) as f32 * scale;
     let advance_width = face.glyph_hor_advance(glyph_id).unwrap_or(0) as f32 * scale;
@@ -191,6 +222,25 @@ fn extract_glyph_uncached(face: &mut ttf_parser::Face, character: char, size: f3
 
     let x_min = bbox.x_min as f32;
     let y_min = bbox.y_min as f32;
+
+    if hinting_enabled() && !outline.contours.is_empty() {
+        let zones = hinting::blue_zones(face, scale, weight);
+        let warp = hinting::vertical_warp(&outline.contours, &zones, scale, face.units_per_em() as f32);
+        let hinted: Vec<Vec<(f32, f32)>> = outline.contours.iter().map(|contour| {
+            contour.iter().map(|&(px, py)| ((px - x_min) * scale, warp.map(py))).collect()
+        }).collect();
+        // Boite du glyphe en pixels ENTIERS autour de la ligne de base : le
+        // masque commence alors sur une frontiere de pixel, et les bords
+        // cales par le hinting y restent (une boite fractionnaire, comme
+        // sans hinting, decalerait tout le glyphe d'une fraction de pixel).
+        let (lo, hi) = hinted.iter().flatten().fold((f32::MAX, f32::MIN), |(lo, hi), p| (lo.min(p.1), hi.max(p.1)));
+        let bottom = (lo + 1e-3).floor();
+        let top = (hi - 1e-3).ceil().max(bottom + 1.0);
+        let contours = hinted.into_iter().map(|contour| {
+            contour.into_iter().map(|(px, py)| (px, py - bottom)).collect()
+        }).collect();
+        return Ok(Glyph::new(width, top - bottom, advance_width, -bottom, lsb, contours));
+    }
 
     let scaled_contours = outline.contours.iter().map(|contour| {
         contour.iter().map(|(px, py)| {

@@ -193,6 +193,19 @@ fn toasts_sit_in_the_corner_and_tooltips_appear_after_a_pause() {
     assert_eq!(s.tooltip.as_ref().map(|t| t.0.as_str()), Some("Enregistre le formulaire"));
     handle_event(&mut s, WindowEvent::WindowMouseMove(5, 5), KeyboardLayout::Qwerty, VIEW);
     assert!(s.tooltip.is_none(), "disparait des que la souris bouge");
+
+    // Rien sous la souris : cherchee une fois par pause, pas a chaque tic
+    // (la chercher refait la mise en page de tout l'ecran).
+    s.still_since = std::time::Instant::now() - std::time::Duration::from_secs(1);
+    assert!(!handle_tick(&mut s, KeyboardLayout::Qwerty, VIEW));
+    assert!(s.tooltip_sought);
+    (s.mouse_x, s.mouse_y) = (x + w as i32 / 2, y + h as i32 / 2);
+    assert!(!handle_tick(&mut s, KeyboardLayout::Qwerty, VIEW) && s.tooltip.is_none(), "pas cherchee de nouveau tant que la souris n'a pas bouge");
+    // La souris bouge : on cherche de nouveau a la pause suivante.
+    handle_event(&mut s, WindowEvent::WindowMouseMove(x + w as i32 / 2, y + h as i32 / 2), KeyboardLayout::Qwerty, VIEW);
+    s.still_since = std::time::Instant::now() - std::time::Duration::from_secs(1);
+    assert!(handle_tick(&mut s, KeyboardLayout::Qwerty, VIEW));
+    assert!(s.tooltip.is_some());
 }
 
 #[test]

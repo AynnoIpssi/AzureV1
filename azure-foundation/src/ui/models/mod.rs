@@ -5,6 +5,7 @@ pub mod image;
 pub mod video;
 pub mod control;
 pub mod textarea;
+pub mod toile;
 pub mod rich;
 pub mod ui_node;
 pub mod decoration;

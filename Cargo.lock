@@ -46,29 +46,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "azure-dashboard"
-version = "0.1.0"
-dependencies = [
- "azure-core",
- "azure-engine",
- "azure-foundation",
- "azure-manager",
- "azure-provider",
- "azure-service",
-]
-
-[[package]]
-name = "azure-docs"
-version = "0.1.0"
-dependencies = [
- "azure-core",
- "azure-engine",
- "azure-foundation",
- "azure-rooter",
- "azure-stockage",
-]
-
-[[package]]
 name = "azure-engine"
 version = "0.1.0"
 dependencies = [
@@ -92,13 +69,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "azure-ide"
-version = "0.1.0"
-dependencies = [
- "azure-foundation",
-]
-
-[[package]]
 name = "azure-manager"
 version = "0.1.0"
 dependencies = [
@@ -107,42 +77,6 @@ dependencies = [
  "azure-service",
  "azure-stockage",
  "libc",
-]
-
-[[package]]
-name = "azure-meteo"
-version = "0.1.0"
-dependencies = [
- "azure-foundation",
-]
-
-[[package]]
-name = "azure-note"
-version = "0.1.0"
-dependencies = [
- "azure-core",
- "azure-docs",
- "azure-engine",
- "azure-foundation",
- "azure-manager",
- "azure-rooter",
- "azure-service",
- "azure-stockage",
-]
-
-[[package]]
-name = "azure-portfolio"
-version = "0.1.0"
-dependencies = [
- "azure-engine",
- "azure-foundation",
-]
-
-[[package]]
-name = "azure-practice"
-version = "0.1.0"
-dependencies = [
- "azure-foundation",
 ]
 
 [[package]]
@@ -174,18 +108,6 @@ name = "azure-stockage"
 version = "0.1.0"
 dependencies = [
  "azure-core",
- "libc",
-]
-
-[[package]]
-name = "azure-testeur"
-version = "0.1.0"
-dependencies = [
- "azure-core",
- "azure-engine",
- "azure-foundation",
- "azure-manager",
- "azure-note",
  "libc",
 ]
 

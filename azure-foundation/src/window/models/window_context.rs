@@ -58,6 +58,11 @@ pub struct Effects {
     pub flashes: Vec<(String, String, std::time::Duration)>,
     /// Le prochain ecran garde le defilement de l'actuel (voir `refresh`).
     pub keep_scroll: bool,
+    /// Jeton avec lequel cette fenetre passe au premier plan (voir
+    /// `activate`).
+    pub activate: Option<String>,
+    /// Passer la fenetre en plein ecran, ou en sortir (voir `plein_ecran`).
+    pub plein_ecran: Option<bool>,
 }
 
 impl<'a> WindowContext<'a> {
@@ -84,11 +89,24 @@ impl<'a> WindowContext<'a> {
         self.effects.copy = Some(text.to_string());
     }
 
+    /// Met la fenetre en plein ecran (`true`) ou la ramene a sa taille
+    /// (`false`), comme le bouton vert de la barre de titre.
+    pub fn plein_ecran(&mut self, actif: bool) {
+        self.effects.plein_ecran = Some(actif);
+    }
+
     /// Affiche `text` sur le bouton `#id` pendant `duration`, puis lui rend
     /// son texte : `ctx.flash("copier", "Copié", Duration::from_millis(1500))`.
     /// Sans effet si la page change entre-temps.
     pub fn flash(&mut self, id: &str, text: &str, duration: std::time::Duration) {
         self.effects.flashes.push((id.to_string(), text.to_string(), duration));
+    }
+
+    /// Fait passer CETTE fenetre au premier plan, avec un jeton pris lors
+    /// d'un clic dans une autre fenetre de l'app (voir `activation_token`) :
+    /// le compositeur refuse sans jeton lie a une action de l'utilisateur.
+    pub fn activate(&mut self, token: &str) {
+        self.effects.activate = Some(token.to_string());
     }
 
     /// Fait defiler la page jusqu'a l'element `#id` (comme un lien d'ancre

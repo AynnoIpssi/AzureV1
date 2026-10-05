@@ -6,4 +6,5 @@ pub mod rich_layout;
 pub mod fonts;
 pub mod text_block;
 pub mod draw_control;
+pub mod draw_toile;
 pub mod form;

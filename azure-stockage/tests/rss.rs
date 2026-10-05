@@ -47,7 +47,9 @@ impl Db {
 }
 
 fn notes() -> Db {
-    let mut db = Db::new(&format!("notes-{:?}", std::thread::current().id()));
+    // Un dossier par test : le fil dans un meme processus, et le processus
+    // quand chaque test tourne dans le sien (Azure Testeur).
+    let mut db = Db::new(&format!("notes-{}-{:?}", std::process::id(), std::thread::current().id()));
     db.run(
         "CREATE TABLE notes (id INT PRIMARY KEY, titre TEXT NOT NULL, fait BOOL DEFAULT false, prio INT);
          INSERT INTO notes (titre, prio) VALUES ('Courses', 2), ('Sport', 1), ('Lire', 3);

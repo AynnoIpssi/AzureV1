@@ -10,8 +10,9 @@ use crate::navigation::models::incoming::Incoming;
 use crate::navigation::models::route_table::RouteTable;
 use crate::ui::models::ui_node::UiNode;
 use crate::ui::services::draw_ui::draw_ui;
-use crate::ui::services::interact::{self, KeyboardLayout, Keymap};
+use crate::ui::services::interact::{self, KeyboardLayout};
 use crate::window::models::header_bar::{self, HeaderBar, HeaderButton};
+use crate::window::models::hote::{Hote, WaylandHote};
 use crate::window::models::resize_edge::resize_edge_at;
 use crate::window::services::system_theme;
 use crate::window::models::window_context::{Effects, WindowContext};
@@ -26,12 +27,9 @@ use azure_engine::rendering::models::canvas::Canvas;
 use azure_engine::rendering::models::color::Color;
 use azure_engine::platform::wayland::managers::surface_manager::run_event_loop_interactive;
 use azure_engine::platform::wayland::managers::shared_memory_manager::unmap_memory;
-use azure_engine::platform::wayland::managers::xdg_manager::{attach, move_toplevel, resize_toplevel, set_fullscreen, set_minimized, unset_fullscreen};
-use azure_engine::platform::wayland::managers::surface_manager::{commit, damage_buffer};
 use azure_engine::platform::wayland::managers::xdg_manager::{set_title, set_app_id};
 use azure_engine::platform::wayland::managers::output_manager::get_screen_resolution;
 use azure_engine::platform::wayland::models::screen_output::ScreenOutput;
-use azure_engine::platform::wayland::models::window::Window as WaylandWindow;
 use std::cell::RefCell;
 use std::sync::mpsc::Receiver;
 use azure_service::flux::{FluxEvent, Listener, Value as FluxValue};
@@ -76,17 +74,20 @@ const BACKGROUND_COLOR: Color = Color::new(20, 19, 18, 255);
 // (`dirty`/`last_present`), et la barre d'en-tete auto-dessinee (voir
 // `window::models::header_bar`) - un chrome de fenetre, pas un `UiNode`
 // de l'application, donc distinct de `EventState`.
-struct LoopState {
-    event: EventState,
+pub(crate) struct LoopState {
+    pub(crate) event: EventState,
     // Boutons dont le texte est change pour un temps (voir
     // `WindowContext::flash`), rendus a leur texte par `on_tick`.
     flashes: Vec<Flash>,
     // Le prochain ecran garde le defilement (voir `WindowContext::refresh`).
     keep_scroll: bool,
+    // Jeton avec lequel passer au premier plan (voir
+    // `WindowContext::activate`), pris par la boucle au tic suivant.
+    activate: Option<String>,
     // Ce que coute la boucle (voir `Perf`).
-    perf: Perf,
-    canvas: Canvas,
-    dirty: bool,
+    pub(crate) perf: Perf,
+    pub(crate) canvas: Canvas,
+    pub(crate) dirty: bool,
     last_present: Instant,
     header: HeaderBar,
     header_hover: Option<HeaderButton>,
@@ -152,6 +153,8 @@ struct LoopState {
     fluxes: Vec<(Listener, FluxHandler)>,
     // Voir `AzureWindow::on_tick`.
     on_tick: Option<OnClick>,
+    // L'inspecteur (F12, voir `crate::inspector`).
+    pub(crate) inspector: crate::inspector::Inspector,
 }
 
 // Rappel d'un flux ecoute (voir `AzureWindow::flux`).
@@ -183,7 +186,14 @@ fn cursor_kind(s: &LoopState) -> CursorKind {
 // `header_bar::content_box` directement partout : sinon, sous decoration
 // native, le contenu applicatif se dessinerait avec une marge de
 // `HEADER_HEIGHT` vide en haut, pour une barre qui n'est plus dessinee.
-fn content_box(state: &LoopState) -> (u32, u32, u32, u32) {
+pub(crate) fn content_box(state: &LoopState) -> (u32, u32, u32, u32) {
+    // L'inspecteur ouvert prend la droite de la fenetre : la page se
+    // recalcule dans ce qui reste, comme dans Chrome.
+    state.inspector.page_box(window_content(state))
+}
+
+// Toute la place sous la barre d'en-tete (page + inspecteur).
+fn window_content(state: &LoopState) -> (u32, u32, u32, u32) {
     if state.decorated {
         (0, 0, state.canvas.width, state.canvas.height)
     } else {
@@ -197,7 +207,7 @@ fn content_box(state: &LoopState) -> (u32, u32, u32, u32) {
 // part : apres un redimensionnement de fenetre (voir `AzureWindow::run`,
 // le bras `WindowEvent::WindowResize`), `state.canvas` est deja recree a
 // la bonne taille, donc tout ici suit automatiquement.
-fn redraw(state: &mut LoopState) {
+pub(crate) fn redraw(state: &mut LoopState) {
     let (width, height) = (state.canvas.width, state.canvas.height);
     // `draw_rect` remplit une ligne entiere d'un coup (voir sa
     // documentation) : bien plus rapide qu'ecrire chaque pixel du fond
@@ -206,6 +216,8 @@ fn redraw(state: &mut LoopState) {
     draw_rect(0, 0, width, height, &BACKGROUND_COLOR, &mut state.canvas);
     if !state.decorated {
         draw_header(&mut state.canvas, width, &state.header, state.header_hover, state.fullscreen);
+        let hover = header_bar::on_inspect_button(width, state.event.mouse_x, state.event.mouse_y);
+        crate::inspector::draw_header_button(header_bar::inspect_button(width), state.inspector.open, hover, state.inspector.enregistrement.is_some(), &mut state.canvas);
     }
 
     // Le contenu de l'application se dessine SOUS la barre d'en-tete
@@ -234,6 +246,8 @@ fn redraw(state: &mut LoopState) {
     if let Some((text, x, y)) = &state.event.tooltip {
         crate::ui::services::draw_ui::draw_tooltip(text, *x, *y, content, &mut state.canvas);
     }
+    let full = window_content(state);
+    crate::inspector::draw(&mut state.inspector, &state.event.ui_nodes, full, &mut state.canvas);
 }
 
 // Un bouton affiche `shown` a la place de `original` jusqu'a `until`.
@@ -247,6 +261,9 @@ struct Flash {
 // Applique ce qu'un rappel a demande (voir `window_context::Effects`).
 fn apply_effects(s: &mut LoopState, effects: Effects) {
     s.keep_scroll |= effects.keep_scroll;
+    if effects.activate.is_some() {
+        s.activate = effects.activate;
+    }
     if let Some(text) = effects.copy {
         s.event.clipboard = text;
         s.event.clipboard_changed = true;
@@ -285,33 +302,26 @@ fn end_flashes(s: &mut LoopState) -> bool {
     changed
 }
 
-// La carte du clavier (a l'ouverture, puis a chaque changement de
-// disposition) et l'etat des verrous, tels que le compositeur les envoie.
-fn refresh_keyboard(win: &mut WaylandWindow, event: &mut EventState, layout: &std::cell::Cell<KeyboardLayout>) {
-    if let Some(text) = win.take_keymap() {
-        match Keymap::parse(&text) {
-            Ok(keymap) => layout.set(KeyboardLayout::Xkb(keymap.leak())),
-            Err(err) => eprintln!("AzureWindow: carte du clavier illisible ({err}), disposition {:?} gardee", layout.get()),
-        }
-    }
-    let (locked, group) = win.keyboard_modifiers();
-    // Bits usuels des cartes XKB : Lock (Verr. Maj) = 2, Mod2 (Verr. Num) = 16.
-    event.caps_lock = locked & 2 != 0;
-    event.num_lock = locked & 16 != 0;
-    event.group = group;
-}
-
 // `AzureWindow::on_click` avec le contexte du moment (bouton touche,
 // valeurs des champs) - apres un clic souris ou une activation au clavier.
-fn call_on_click(s: &mut LoopState, win: &mut WaylandWindow) {
+fn call_on_click(s: &mut LoopState, h: &mut dyn Hote) {
     let Some(mut on_click) = s.on_click.take() else { return };
     let clicked = s.event.clicked_id.clone();
     // Jeton demande seulement si le rappel en a besoin (voir
     // `WindowContext::activation_token`).
-    let mut token = || win.activation_token();
-    let (scroll, effects) = with_context_activation(s, clicked.as_deref(), Some(&mut token), |ctx| on_click(ctx));
+    let mut token = || h.jeton_activation();
+    let nom = crate::perf::generaliser(clicked.as_deref().unwrap_or("?"));
+    let (scroll, effects) = crate::perf::mesurer("Clic", &nom, || with_context_activation(s, clicked.as_deref(), Some(&mut token), |ctx| on_click(ctx)));
     s.on_click = Some(on_click);
+    let plein_ecran = effects.plein_ecran;
     apply_effects(s, effects);
+    if let Some(actif) = plein_ecran
+        && actif != s.fullscreen
+    {
+        s.fullscreen = actif;
+        h.plein_ecran(actif);
+        s.dirty = true;
+    }
     if let Some(target) = scroll {
         let content = content_box(s);
         if crate::ui::services::interact::scroll_to_anchor(&mut s.event.ui_nodes, &target, content) {
@@ -359,29 +369,9 @@ fn with_context_activation(s: &mut LoopState, clicked: Option<&str>, activation:
     (ctx.scroll_request.take(), std::mem::take(&mut ctx.effects))
 }
 
-// Copie `state.canvas` dans la memoire partagee et republie la surface -
-// c'est ce qui rend un `redraw` precedent visible a l'ecran. Sans
-// synchronisation par `wl_surface.frame` (simplification deja presente
-// avant l'ajout de l'interactivite : un seul buffer, pas de double-tampon).
-// `win.buffer_id()` est relu a chaque appel (pas capture une seule fois
-// par l'appelant) : apres un `win.resize(...)`, c'est un tout nouveau
-// `wl_buffer` (les buffers Wayland ont une taille fixe, voir
-// `Window::resize`) - une valeur capturee avant le redimensionnement
-// serait perimee.
-fn present(win: &mut WaylandWindow, state: &LoopState, surface_id: u32) {
-    let (width, height) = (state.canvas.width, state.canvas.height);
-    unsafe {
-        std::ptr::copy_nonoverlapping(state.canvas.buffer.as_ptr(), win.ptr(), state.canvas.buffer.len());
-    }
-    let buffer_id = win.buffer_id();
-    attach(win.connection_mut(), surface_id, buffer_id).expect("Failed to attach");
-    damage_buffer(win.connection_mut(), surface_id, 0, 0, width as i32, height as i32).expect("Failed to damage");
-    commit(win.connection_mut(), surface_id).expect("Failed to commit");
-}
-
-fn redraw_and_present(win: &mut WaylandWindow, state: &mut LoopState, surface_id: u32) {
+fn redraw_and_present(h: &mut dyn Hote, state: &mut LoopState) {
     redraw(state);
-    present(win, state, surface_id);
+    h.presenter(&state.canvas);
 }
 
 // Presente `state` seulement si (a) quelque chose a effectivement change
@@ -396,12 +386,12 @@ fn redraw_and_present(win: &mut WaylandWindow, state: &mut LoopState, surface_id
 /// Avec `AZURE_PERF=1` : un bilan par seconde (tics, evenements, redessins
 /// et leurs causes, temps passe dans chaque etape) pour trouver ce qui
 /// charge ou fige une app.
-struct Perf {
+pub(crate) struct Perf {
     bilan: bool,
     depuis: Instant,
     tics: u32,
     evenements: u32,
-    redessins: u32,
+    pub(crate) redessins: u32,
     causes: std::collections::BTreeMap<&'static str, u32>,
     temps: std::collections::BTreeMap<&'static str, Duration>,
 }
@@ -443,16 +433,424 @@ impl Perf {
     }
 }
 
-fn flush_if_dirty(win: &mut WaylandWindow, state: &mut LoopState, surface_id: u32) {
+pub(crate) fn flush_if_dirty(h: &mut dyn Hote, state: &mut LoopState) {
     if !state.dirty || state.last_present.elapsed() < MIN_PRESENT_INTERVAL {
         return;
     }
     let debut = Instant::now();
-    redraw_and_present(win, state, surface_id);
+    crate::perf::mesurer("Fenêtre", "dessin", || redraw_and_present(h, state));
     state.perf.redessins += 1;
     state.perf.temps("dessin", debut.elapsed());
     state.dirty = false;
     state.last_present = Instant::now();
+}
+
+// Un evenement de la fenetre (souris, clavier, taille...) : le meme
+// traitement pour la vraie fenetre et pour le pilote d'essai (voir
+// `hote`). `false` : fermer.
+pub(crate) fn sur_evenement(s: &mut LoopState, h: &mut dyn Hote, event: WindowEvent, layout: &std::cell::Cell<KeyboardLayout>) -> bool {
+    let debut_evenement = Instant::now();
+    let deja_sale = s.dirty;
+    s.perf.evenements += 1;
+    h.clavier(&mut s.event, layout);
+    let layout = layout.get();
+
+    // L'inspecteur (F12) prend ses evenements avant l'app : son
+    // panneau, et la page tant qu'il sert a choisir un element.
+    if let WindowEvent::WindowMouseMove(x, y) = event {
+        s.event.mouse_x = x;
+        s.event.mouse_y = y;
+    }
+    // Bouton « Inspecter » de la barre de titre.
+    if !s.decorated {
+        if let WindowEvent::WindowMouseButton(button, true) = event
+            && button == BTN_LEFT
+            && header_bar::on_inspect_button(s.canvas.width, s.event.mouse_x, s.event.mouse_y)
+        {
+            s.inspector.toggle();
+            s.dirty = true;
+            flush_if_dirty(h, s);
+            return true;
+        }
+        if let WindowEvent::WindowMouseMove(x, y) = event {
+            let (bx, by, bw, bh) = header_bar::inspect_button(s.canvas.width);
+            let near = x >= bx as i32 - 40 && y >= 0 && x < (bx + bw) as i32 + 40 && y < (by + bh) as i32 + 10;
+            if near {
+                s.dirty = true;
+            }
+        }
+    }
+    let full = window_content(s);
+    let ctrl_shift = s.event.ctrl_held() && s.event.shift_held();
+    if let Some(redraw) = s.inspector.handle_event(&event, &s.event.ui_nodes, full, (s.event.mouse_x, s.event.mouse_y), ctrl_shift) {
+        if redraw {
+            s.dirty = true;
+        }
+        // Le test genere a l'arret d'un enregistrement : copie.
+        if let Some(code) = s.inspector.a_copier.take() {
+            s.event.clipboard = code;
+            if let Err(err) = h.ecrire_presse_papiers(&s.event.clipboard) {
+                eprintln!("AzureWindow: presse-papiers du systeme indisponible: {err}");
+            }
+        }
+        flush_if_dirty(h, s);
+        return true;
+    }
+    // Un scenario s'enregistre (voir `inspector::enregistreur`) : ce que
+    // l'app va recevoir, tant que l'ecran est celui que la personne voit.
+    let page = content_box(s);
+    let dans_la_page = s.event.mouse_x >= page.0 as i32 && s.event.mouse_y >= page.1 as i32;
+    if let Some(r) = s.inspector.enregistrement.as_mut()
+        && (dans_la_page || matches!(event, WindowEvent::WindowKeyPress(..)))
+    {
+        r.noter(&event, &s.event.ui_nodes, page, (s.event.mouse_x, s.event.mouse_y));
+        s.dirty = true;
+    }
+
+    // Coller : le texte vient du presse-papiers du systeme (copie
+    // par n'importe quelle app, Azure ou non), pas seulement de
+    // cette fenetre.
+    if let WindowEvent::WindowKeyPress(key, true) = event
+        && interact::key_to_input_with(key, layout, s.event.modifiers(layout)) == Some(interact::KeyInput::Paste)
+        && let Some(text) = h.presse_papiers()
+    {
+        s.event.clipboard = text;
+    }
+
+    // Un clic gauche qui tombe sur un des 3 boutons de la
+    // barre d'en-tete (voir `header_bar::button_at`) est gere
+    // ICI, jamais transmis a `dispatch::handle_event` : ce
+    // n'est pas une interaction sur l'arbre `ui_nodes` de
+    // l'application, mais sur le chrome de CETTE fenetre.
+    // Desactive entierement quand le compositeur decore lui-meme
+    // la fenetre (`s.decorated`) : il n'y a alors ni barre ni
+    // boutons dessines par nous, et le haut de la surface EST du
+    // contenu applicatif (la decoration native se dessine hors
+    // de notre buffer) - y detecter des boutons y avalerait des
+    // clics destines a l'application.
+    let header_click = if s.decorated {
+        None
+    } else {
+        match event {
+            WindowEvent::WindowMouseButton(button, true) if button == BTN_LEFT => {
+                header_bar::button_at(s.canvas.width, &s.header.layout, s.event.mouse_x, s.event.mouse_y)
+            }
+            _ => None,
+        }
+    };
+
+    if let Some(button) = header_click {
+        match button {
+            HeaderButton::Minimize => {
+                h.minimiser();
+            }
+            HeaderButton::Fullscreen => {
+                s.fullscreen = !s.fullscreen;
+                if s.fullscreen {
+                    h.plein_ecran(true);
+                } else {
+                    h.plein_ecran(false);
+                }
+                s.dirty = true;
+            }
+            // Ferme la fenetre nous-memes (voir
+            // `run_event_loop_interactive`, qui arrete sa
+            // boucle quand ce callback retourne `false`) -
+            // exactement comme un vrai `xdg_toplevel::close`
+            // du compositeur, juste demande par notre propre
+            // bouton plutot que par lui.
+            HeaderButton::Close => return false,
+        }
+    } else if !s.decorated
+        && matches!(event, WindowEvent::WindowMouseButton(button, true) if button == BTN_LEFT)
+        && resize_edge_at(s.canvas.width, s.canvas.height, s.event.mouse_x, s.event.mouse_y).is_some()
+    {
+        // Clic gauche pres d'un bord/coin de la fenetre (voir
+        // `resize_edge::resize_edge_at` - n'importe quel bord,
+        // header inclus, contrairement a la poignee de
+        // deplacement ci-dessous qui n'existe QUE dans la barre
+        // d'en-tete) : demande au compositeur un
+        // redimensionnement interactif le long de ce bord,
+        // meme mecanisme que `move_toplevel` (le compositeur
+        // prend la main sur le pointeur jusqu'au relachement du
+        // bouton). Prioritaire sur la poignee de deplacement
+        // pour que les quelques pixels du bord superieur de la
+        // barre d'en-tete restent redimensionnables plutot que
+        // toujours interpretes comme un deplacement.
+        let edge = resize_edge_at(s.canvas.width, s.canvas.height, s.event.mouse_x, s.event.mouse_y)
+            .expect("checked by the guard above");
+        h.redimensionner_au_bord(edge);
+    } else if !s.decorated
+        && matches!(event, WindowEvent::WindowMouseButton(button, true) if button == BTN_LEFT)
+        && s.event.mouse_y >= 0
+        && (s.event.mouse_y as u32) < header_bar::HEADER_HEIGHT
+    {
+        // Clic gauche dans la barre d'en-tete maison, hors des 3
+        // boutons (deja geres ci-dessus par `header_click`) :
+        // c'est la poignee de deplacement de la fenetre. Demande
+        // au compositeur de prendre la main sur le pointeur
+        // jusqu'au relachement du bouton (voir
+        // `xdg_manager::move_toplevel`) - exactement ce qu'une
+        // decoration native ferait pour un glisser-deposer de
+        // fenetre. Le serial DOIT etre celui de CET appui (voir
+        // `Window::last_pointer_serial`, mis a jour juste avant
+        // que ce callback soit appele).
+        h.deplacer();
+    } else {
+        match event {
+            // Redimensionnement (bordure tiree a la souris,
+            // passage en plein ecran via le bouton
+            // ci-dessus, "snap" du compositeur, ...) : propre
+            // a CETTE fenetre Wayland (recreer le
+            // buffer/canvas), pas une interaction sur l'arbre
+            // de widgets. `(0, 0)` (le compositeur laisse le
+            // client choisir) est ignore : on garde la taille
+            // courante plutot que de tenter un buffer vide.
+            WindowEvent::WindowResize(new_width, new_height) if new_width > 0 && new_height > 0 => {
+                h.nouvelle_taille(new_width, new_height);
+                // Le layout (pourcentages de la boite de
+                // contenu, voir `layout::managers::layout_manager`)
+                // se recalcule tout seul au prochain redessin
+                // a partir des nouvelles dimensions de
+                // `state.canvas` - rien d'autre a recalculer ici.
+                s.canvas = Canvas::new(new_width as u32, new_height as u32);
+                s.dirty = true;
+            }
+            WindowEvent::WindowResize(_, _) => {}
+            // Distingue du `other` ci-dessous UNIQUEMENT pour
+            // pouvoir appeler `on_click` (voir
+            // `AzureWindow::on_click`) apres le dispatch normal
+            // - le relachement du bouton, les autres boutons de
+            // souris et tout le reste continuent de tomber dans
+            // `other`, inchanges.
+            WindowEvent::WindowMouseButton(button, true) if button == BTN_LEFT => {
+                let content = content_box(s);
+                if crate::perf::mesurer("Fenêtre", "souris et clavier", || dispatch::handle_event(&mut s.event, event, layout, content)) {
+                    s.dirty = true;
+                    call_on_click(s, h);
+                }
+            }
+            WindowEvent::WindowMouseMove(x, y) => {
+                if !s.decorated {
+                    let new_header_hover = header_bar::button_at(s.canvas.width, &s.header.layout, x, y);
+                    if new_header_hover != s.header_hover {
+                        s.header_hover = new_header_hover;
+                        s.dirty = true;
+                    }
+                }
+                let content = content_box(s);
+                if crate::perf::mesurer("Fenêtre", "souris et clavier", || dispatch::handle_event(&mut s.event, event, layout, content)) {
+                    s.dirty = true;
+                }
+            }
+            // Tout le reste (clic dans le contenu, glisser,
+            // frappe, defilement, raccourcis...) vit dans
+            // `event::services::dispatch`, reutilisable telle
+            // quelle hors de cette fenetre - voir sa
+            // documentation.
+            other => {
+                let content = content_box(s);
+                if crate::perf::mesurer("Fenêtre", "souris et clavier", || dispatch::handle_event(&mut s.event, other, layout, content)) {
+                    s.dirty = true;
+                }
+                // Bouton ou champ active au clavier (Entree,
+                // Espace, fleches, Echap) : comme un clic.
+                if s.event.take_activation() {
+                    call_on_click(s, h);
+                }
+                // Element lache dans une zone.
+                if let Some(dropped) = s.event.take_dropped() {
+                    call_on_drop(s, &dropped);
+                }
+            }
+        }
+    }
+
+    h.curseur(cursor_kind(s));
+
+    // Copier : la selection du systeme devient la notre, les
+    // autres apps peuvent coller.
+    if s.event.take_clipboard_change()
+        && let Err(err) = h.ecrire_presse_papiers(&s.event.clipboard)
+    {
+        eprintln!("AzureWindow: presse-papiers du systeme indisponible: {err}");
+    }
+
+    if s.dirty && !deja_sale {
+        s.perf.cause("evenement");
+    }
+    s.perf.temps("evenements", debut_evenement.elapsed());
+    flush_if_dirty(h, s);
+    true
+}
+
+// Un tic (~60 Hz) : routes recues, flux, `on_tick`, animations, redessin.
+// `false` : fermer.
+pub(crate) fn sur_tic(s: &mut LoopState, h: &mut dyn Hote, layout: &std::cell::Cell<KeyboardLayout>) -> bool {
+    // `kill` (voir azure_core::security::termination) : fermer
+    // comme par le bouton, `on_close` compris.
+    if azure_core::security::termination::requested() {
+        return false;
+    }
+    let content = content_box(s);
+    // Transition CSS en cours (voir `ui::models::transition`) :
+    // l'image suivante au prochain tic.
+    if crate::ui::models::transition::take_pending() {
+        s.dirty = true;
+        s.perf.cause("transition");
+    }
+
+    // Nouvel ecran recu via l'un ou l'autre transport de routes
+    // (voir `LoopState::routes`) : remplace `ui_nodes` tel quel,
+    // comme un `.ui(nodes)` rappele en cours de session. Draine
+    // tout ce qui est en attente sur CHACUN (pas juste le
+    // premier) mais ne garde que le tout dernier ecran resolu -
+    // inutile de redessiner pour des routes deja perimees par
+    // une plus recente, qu'elle vienne du meme transport ou de
+    // l'autre.
+    let mut pending_screen = None;
+
+    // INTER-app (voir `navigation` et `AzureWindow::navigation`) :
+    // un thread dedie a deja pousse chaque route decodee dans ce
+    // canal (voir `navigation_manager::listen`).
+    if let Some(incoming) = &s.incoming_routes {
+        while let Ok(message) = incoming.try_recv() {
+            match message {
+                Incoming::Route(route) => {
+                    // Jeton de l'app qui a demande la page :
+                    // la fenetre passe au premier plan.
+                    if !route.activation.is_empty()
+                        && let Err(err) = h.activer(&route.activation)
+                    {
+                        eprintln!("AzureWindow: premier plan impossible : {err}");
+                    }
+                    if let Some(table) = &s.routes
+                        && let Some(nodes) = table.resolve(&route) {
+                            pending_screen = Some(nodes);
+                        }
+                }
+                // Fenetre envoyee par une autre app (voir
+                // `WindowContext::send_window`) : ouverte dans
+                // son propre thread, comme `open_window`.
+                Incoming::Window(shared) => match shared.to_window() {
+                    Ok(window) => {
+                        std::thread::spawn(move || window.run());
+                    }
+                    Err(err) => eprintln!("AzureWindow: fenetre recue invalide : {err}"),
+                },
+            }
+        }
+    }
+
+    // Flux ecoutes (voir `AzureWindow::flux`) : AVANT le
+    // sondage intra-app, pour qu'un `ctx.goto` lance par un
+    // rappel prenne effet des ce tic.
+    let mut scrolls = Vec::new();
+    let mut all_effects = Vec::new();
+    for (listener, handler) in s.fluxes.iter_mut() {
+        for event in listener.poll() {
+            let values = crate::ui::services::form::form_values(&s.event.ui_nodes);
+            let mut ctx = WindowContext {
+                intra: s.intra.as_ref(),
+                nav: s.nav.as_mut(),
+                windows: s.windows.as_ref(),
+                routes: s.routes.as_ref(),
+                stockage: s.stockage.as_ref(),
+                app_id: s.owner_app_id,
+                clicked: None,
+                values: Some(&values),
+                scroll_request: None,
+                effects: Effects::default(),
+                activation: None,
+            };
+            crate::perf::mesurer("Flux", "écoute", || handler(&mut ctx, &event, listener.state()));
+            scrolls.extend(ctx.scroll_request.take());
+            all_effects.push(std::mem::take(&mut ctx.effects));
+        }
+    }
+    if let Some(mut tick) = s.on_tick.take() {
+        let debut = Instant::now();
+        let (scroll, effects) = crate::perf::mesurer("Tâche de fond", "on_tick", || with_context(s, None, |ctx| tick(ctx)));
+        s.perf.temps("on_tick", debut.elapsed());
+        s.on_tick = Some(tick);
+        scrolls.extend(scroll);
+        all_effects.push(effects);
+    }
+    for effects in all_effects {
+        apply_effects(s, effects);
+    }
+    if let Some(token) = s.activate.take()
+        && let Err(err) = h.activer(&token)
+    {
+        eprintln!("AzureWindow: premier plan impossible : {err}");
+    }
+    for target in scrolls {
+        if crate::ui::services::interact::scroll_to_anchor(&mut s.event.ui_nodes, &target, content) {
+            s.dirty = true;
+            s.perf.cause("ancre");
+        }
+    }
+
+    // INTRA-app (voir `AzureWindow::intra`) : sondage non
+    // bloquant de l'`IntraRouter` local, aucun thread ni canal -
+    // voir `intra_navigation_manager::drain`.
+    let debut_ecran = Instant::now();
+    if let Some(intra) = &s.intra
+        && let Some(table) = &s.routes
+            && let Some(nodes) = intra_navigation_manager::drain(intra, table) {
+                pending_screen = Some(nodes);
+            }
+    if pending_screen.is_some() {
+        s.perf.temps("nouvel ecran", debut_ecran.elapsed());
+    }
+
+    if let Some(mut nodes) = pending_screen {
+        if std::mem::take(&mut s.keep_scroll) {
+            interact::carry_scroll_anchored(&s.event.ui_nodes, &mut nodes, content);
+        }
+        // Les toiles gardent leur vue (zoom, decalage).
+        interact::carry_toiles(&s.event.ui_nodes, &mut nodes);
+        s.event.ui_nodes = nodes;
+        s.event.tooltip_sought = false;
+        s.event.command_menu = None;
+        s.flashes.clear();
+        s.dirty = true;
+        s.perf.cause("nouvel ecran");
+    }
+    if !s.flashes.is_empty() && end_flashes(s) {
+        s.dirty = true;
+        s.perf.cause("flash");
+    }
+
+    // Clignotement du curseur + repetition d'une touche
+    // maintenue : ne dependent que du temps ecoule, pas d'un
+    // evenement recu - voir `dispatch::handle_tick`.
+    let debut = Instant::now();
+    if crate::perf::mesurer("Fenêtre", "curseur et défilement", || dispatch::handle_tick(&mut s.event, layout.get(), content)) {
+        s.dirty = true;
+        s.perf.cause("defilement/curseur/touche");
+    }
+    s.perf.temps("tic", debut.elapsed());
+
+    // C'est aussi ici (appele a chaque tic, ~60Hz) que les
+    // redessins mis en attente par `on_event` (voir
+    // `MIN_PRESENT_INTERVAL`) sont effectivement flushes.
+    flush_if_dirty(h, s);
+    s.perf.fin_de_tic();
+    crate::perf::publier_si_temps();
+    true
+}
+
+// La fenetre se ferme : `on_close` (derniere chance d'enregistrer), puis
+// l'app quitte le routeur.
+pub(crate) fn terminer(s: &mut LoopState) {
+    // Derniere chance d'enregistrer ce qui a ete tape (voir `on_close`).
+    if let Some(mut on_close) = s.on_close.take() {
+        with_context(s, None, |ctx| on_close(ctx));
+    }
+    if let Some(nav) = s.nav.as_mut() {
+        let _ = navigation_manager::disconnect(nav);
+    }
 }
 
 pub struct AzureWindow{
@@ -521,6 +919,14 @@ impl AzureWindow {
             fluxes: Vec::new(),
             on_tick: None,
         }
+    }
+
+    /// La taille demandee par l'app (`size` ou `spec`), s'il y en a une.
+    pub(crate) fn taille_demandee(&self) -> Option<(u32, u32)> {
+        if let Some(spec) = &self.spec {
+            return Some((spec.size().width(), spec.size().height()));
+        }
+        Some((self.width?, self.height?))
     }
 
     pub fn size(mut self, width: u32, height: u32) -> AzureWindow {
@@ -703,7 +1109,62 @@ impl AzureWindow {
         self
     }
 
+    /// L'etat de la boucle pour cette fenetre (vraie ou pilotee).
+    pub(crate) fn en_etat(self, width: u32, height: u32, header: HeaderBar, decorated: bool) -> LoopState {
+        // Demarre l'ecoute AVANT de construire `state` (voir
+        // `navigation_manager::listen`) : elle ne bloque pas (un thread a
+        // part), donc rien n'empeche de le faire ici plutot que dans la
+        // boucle elle-meme.
+        let incoming_routes = self.nav.as_ref().map(|nav| {
+            navigation_manager::listen(nav).expect("Failed to start navigation listener")
+        });
+        let nav = self.nav;
+        let intra = self.intra;
+        let routes = self.routes;
+        let windows = self.windows;
+        let owner_app_id = self.spec.map(|spec| spec.owner_app_id());
+        let on_click = self.on_click;
+        let on_close = self.on_close;
+        let on_drop = self.on_drop;
+        let stockage = self.stockage;
+        let fluxes = self.fluxes;
+        let on_tick = self.on_tick;
+
+        LoopState {
+            event: EventState::new(self.ui_nodes),
+            flashes: Vec::new(),
+            keep_scroll: false,
+            activate: None,
+            perf: Perf::new(),
+            canvas: Canvas::new(width, height),
+            dirty: false,
+            last_present: Instant::now(),
+            header,
+            header_hover: None,
+            fullscreen: false,
+            decorated,
+            routes,
+            incoming_routes,
+            nav,
+            intra,
+            windows,
+            owner_app_id,
+            stockage,
+            on_click,
+            on_close,
+            on_drop,
+            fluxes,
+            on_tick,
+            inspector: Default::default(),
+        }
+    }
+
     pub fn run(self) {
+        // Pilotee par un essai (voir `crate::essai`) : sans fenetre.
+        if let Some(socket) = std::env::var_os("AZURE_PILOTE") {
+            crate::window::models::pilote::piloter(self, std::path::PathBuf::from(socket));
+            return;
+        }
         let (width, height) = if let Some(spec) = &self.spec {
             (spec.size().width(), spec.size().height())
         } else if self.width.is_none() && self.height.is_none() {
@@ -744,50 +1205,9 @@ impl AzureWindow {
         let header = HeaderBar::new(self.title.clone(), icon, header_bar::ButtonLayout::mac(), theme.dark);
         let decorated = window.is_server_side_decorated();
 
-        // Demarre l'ecoute AVANT de construire `state` (voir
-        // `navigation_manager::listen`) : elle ne bloque pas (un thread a
-        // part), donc rien n'empeche de le faire ici plutot que dans la
-        // boucle elle-meme.
-        let incoming_routes = self.nav.as_ref().map(|nav| {
-            navigation_manager::listen(nav).expect("Failed to start navigation listener")
-        });
-        let nav = self.nav;
-        let intra = self.intra;
-        let routes = self.routes;
-        let windows = self.windows;
-        let owner_app_id = self.spec.map(|spec| spec.owner_app_id());
-        let on_click = self.on_click;
-        let on_close = self.on_close;
-        let on_drop = self.on_drop;
-        let stockage = self.stockage;
-        let fluxes = self.fluxes;
-        let on_tick = self.on_tick;
-
-        let state = RefCell::new(LoopState {
-            event: EventState::new(self.ui_nodes),
-            flashes: Vec::new(),
-            keep_scroll: false,
-            perf: Perf::new(),
-            canvas: Canvas::new(width, height),
-            dirty: false,
-            last_present: Instant::now(),
-            header,
-            header_hover: None,
-            fullscreen: false,
-            decorated,
-            routes,
-            incoming_routes,
-            nav,
-            intra,
-            windows,
-            owner_app_id,
-            stockage,
-            on_click,
-            on_close,
-            on_drop,
-            fluxes,
-            on_tick,
-        });
+        let title = self.title.clone();
+        let app_id = self.app_id.clone().unwrap_or_else(|| slugify_app_id(&self.title));
+        let state = RefCell::new(self.en_etat(width, height, header, decorated));
 
         // Icones de curseur generees puis envoyees une seule fois au
         // compositeur (voir `cursor`) - une erreur ici n'empeche pas la
@@ -796,12 +1216,14 @@ impl AzureWindow {
             .map_err(|err| eprintln!("AzureWindow: curseurs indisponibles: {err}"))
             .ok();
 
-        redraw_and_present(&mut window, &mut state.borrow_mut(), surface_id);
+        {
+            let mut hote = WaylandHote { win: &mut window, toplevel: xdg_toplevel_id, surface: surface_id, curseurs: cursors.as_ref() };
+            redraw_and_present(&mut hote, &mut state.borrow_mut());
+        }
         state.borrow_mut().last_present = Instant::now();
 
         let toplevel_id = window.xdg_toplevel_id();
-        set_title(window.connection_mut(), toplevel_id, &self.title).expect("Failed to set title");
-        let app_id = self.app_id.clone().unwrap_or_else(|| slugify_app_id(&self.title));
+        set_title(window.connection_mut(), toplevel_id, &title).expect("Failed to set title");
         set_app_id(window.connection_mut(), toplevel_id, &app_id).expect("Failed to set app id");
 
         run_event_loop_interactive(
@@ -812,345 +1234,12 @@ impl AzureWindow {
             xdg_wm_id,
             TICK_MS,
             |win, event| {
-                let mut s_ref = state.borrow_mut();
-                let s = &mut *s_ref;
-                let debut_evenement = Instant::now();
-                let deja_sale = s.dirty;
-                s.perf.evenements += 1;
-                refresh_keyboard(win, &mut s.event, &layout);
-                let layout = layout.get();
-
-                // Coller : le texte vient du presse-papiers du systeme (copie
-                // par n'importe quelle app, Azure ou non), pas seulement de
-                // cette fenetre.
-                if let WindowEvent::WindowKeyPress(key, true) = event
-                    && interact::key_to_input_with(key, layout, s.event.modifiers(layout)) == Some(interact::KeyInput::Paste)
-                    && let Some(text) = win.clipboard_text()
-                {
-                    s.event.clipboard = text;
-                }
-
-                // Un clic gauche qui tombe sur un des 3 boutons de la
-                // barre d'en-tete (voir `header_bar::button_at`) est gere
-                // ICI, jamais transmis a `dispatch::handle_event` : ce
-                // n'est pas une interaction sur l'arbre `ui_nodes` de
-                // l'application, mais sur le chrome de CETTE fenetre.
-                // Desactive entierement quand le compositeur decore lui-meme
-                // la fenetre (`s.decorated`) : il n'y a alors ni barre ni
-                // boutons dessines par nous, et le haut de la surface EST du
-                // contenu applicatif (la decoration native se dessine hors
-                // de notre buffer) - y detecter des boutons y avalerait des
-                // clics destines a l'application.
-                let header_click = if s.decorated {
-                    None
-                } else {
-                    match event {
-                        WindowEvent::WindowMouseButton(button, true) if button == BTN_LEFT => {
-                            header_bar::button_at(s.canvas.width, &s.header.layout, s.event.mouse_x, s.event.mouse_y)
-                        }
-                        _ => None,
-                    }
-                };
-
-                if let Some(button) = header_click {
-                    match button {
-                        HeaderButton::Minimize => {
-                            set_minimized(win.connection_mut(), xdg_toplevel_id).expect("Failed to request minimize");
-                        }
-                        HeaderButton::Fullscreen => {
-                            s.fullscreen = !s.fullscreen;
-                            if s.fullscreen {
-                                set_fullscreen(win.connection_mut(), xdg_toplevel_id).expect("Failed to request fullscreen");
-                            } else {
-                                unset_fullscreen(win.connection_mut(), xdg_toplevel_id).expect("Failed to unset fullscreen");
-                            }
-                            s.dirty = true;
-                        }
-                        // Ferme la fenetre nous-memes (voir
-                        // `run_event_loop_interactive`, qui arrete sa
-                        // boucle quand ce callback retourne `false`) -
-                        // exactement comme un vrai `xdg_toplevel::close`
-                        // du compositeur, juste demande par notre propre
-                        // bouton plutot que par lui.
-                        HeaderButton::Close => return false,
-                    }
-                } else if !s.decorated
-                    && matches!(event, WindowEvent::WindowMouseButton(button, true) if button == BTN_LEFT)
-                    && resize_edge_at(s.canvas.width, s.canvas.height, s.event.mouse_x, s.event.mouse_y).is_some()
-                {
-                    // Clic gauche pres d'un bord/coin de la fenetre (voir
-                    // `resize_edge::resize_edge_at` - n'importe quel bord,
-                    // header inclus, contrairement a la poignee de
-                    // deplacement ci-dessous qui n'existe QUE dans la barre
-                    // d'en-tete) : demande au compositeur un
-                    // redimensionnement interactif le long de ce bord,
-                    // meme mecanisme que `move_toplevel` (le compositeur
-                    // prend la main sur le pointeur jusqu'au relachement du
-                    // bouton). Prioritaire sur la poignee de deplacement
-                    // pour que les quelques pixels du bord superieur de la
-                    // barre d'en-tete restent redimensionnables plutot que
-                    // toujours interpretes comme un deplacement.
-                    let edge = resize_edge_at(s.canvas.width, s.canvas.height, s.event.mouse_x, s.event.mouse_y)
-                        .expect("checked by the guard above");
-                    let seat_id = win.seat_id();
-                    let serial = win.last_pointer_serial();
-                    resize_toplevel(win.connection_mut(), xdg_toplevel_id, seat_id, serial, edge.to_wayland())
-                        .expect("Failed to request interactive resize");
-                } else if !s.decorated
-                    && matches!(event, WindowEvent::WindowMouseButton(button, true) if button == BTN_LEFT)
-                    && s.event.mouse_y >= 0
-                    && (s.event.mouse_y as u32) < header_bar::HEADER_HEIGHT
-                {
-                    // Clic gauche dans la barre d'en-tete maison, hors des 3
-                    // boutons (deja geres ci-dessus par `header_click`) :
-                    // c'est la poignee de deplacement de la fenetre. Demande
-                    // au compositeur de prendre la main sur le pointeur
-                    // jusqu'au relachement du bouton (voir
-                    // `xdg_manager::move_toplevel`) - exactement ce qu'une
-                    // decoration native ferait pour un glisser-deposer de
-                    // fenetre. Le serial DOIT etre celui de CET appui (voir
-                    // `Window::last_pointer_serial`, mis a jour juste avant
-                    // que ce callback soit appele).
-                    let seat_id = win.seat_id();
-                    let serial = win.last_pointer_serial();
-                    move_toplevel(win.connection_mut(), xdg_toplevel_id, seat_id, serial)
-                        .expect("Failed to request interactive move");
-                } else {
-                    match event {
-                        // Redimensionnement (bordure tiree a la souris,
-                        // passage en plein ecran via le bouton
-                        // ci-dessus, "snap" du compositeur, ...) : propre
-                        // a CETTE fenetre Wayland (recreer le
-                        // buffer/canvas), pas une interaction sur l'arbre
-                        // de widgets. `(0, 0)` (le compositeur laisse le
-                        // client choisir) est ignore : on garde la taille
-                        // courante plutot que de tenter un buffer vide.
-                        WindowEvent::WindowResize(new_width, new_height) if new_width > 0 && new_height > 0 => {
-                            win.resize(new_width, new_height).expect("Failed to resize window buffer");
-                            // Le layout (pourcentages de la boite de
-                            // contenu, voir `layout::managers::layout_manager`)
-                            // se recalcule tout seul au prochain redessin
-                            // a partir des nouvelles dimensions de
-                            // `state.canvas` - rien d'autre a recalculer ici.
-                            s.canvas = Canvas::new(new_width as u32, new_height as u32);
-                            s.dirty = true;
-                        }
-                        WindowEvent::WindowResize(_, _) => {}
-                        // Distingue du `other` ci-dessous UNIQUEMENT pour
-                        // pouvoir appeler `on_click` (voir
-                        // `AzureWindow::on_click`) apres le dispatch normal
-                        // - le relachement du bouton, les autres boutons de
-                        // souris et tout le reste continuent de tomber dans
-                        // `other`, inchanges.
-                        WindowEvent::WindowMouseButton(button, true) if button == BTN_LEFT => {
-                            let content = content_box(s);
-                            if dispatch::handle_event(&mut s.event, event, layout, content) {
-                                s.dirty = true;
-                                call_on_click(s, win);
-                            }
-                        }
-                        WindowEvent::WindowMouseMove(x, y) => {
-                            if !s.decorated {
-                                let new_header_hover = header_bar::button_at(s.canvas.width, &s.header.layout, x, y);
-                                if new_header_hover != s.header_hover {
-                                    s.header_hover = new_header_hover;
-                                    s.dirty = true;
-                                }
-                            }
-                            let content = content_box(s);
-                            if dispatch::handle_event(&mut s.event, event, layout, content) {
-                                s.dirty = true;
-                            }
-                        }
-                        // Tout le reste (clic dans le contenu, glisser,
-                        // frappe, defilement, raccourcis...) vit dans
-                        // `event::services::dispatch`, reutilisable telle
-                        // quelle hors de cette fenetre - voir sa
-                        // documentation.
-                        other => {
-                            let content = content_box(s);
-                            if dispatch::handle_event(&mut s.event, other, layout, content) {
-                                s.dirty = true;
-                            }
-                            // Bouton ou champ active au clavier (Entree,
-                            // Espace, fleches, Echap) : comme un clic.
-                            if s.event.take_activation() {
-                                call_on_click(s, win);
-                            }
-                            // Element lache dans une zone.
-                            if let Some(dropped) = s.event.take_dropped() {
-                                call_on_drop(s, &dropped);
-                            }
-                        }
-                    }
-                }
-
-                if let Some(cursors) = &cursors
-                    && let Err(err) = cursors.show(win, cursor_kind(s)) {
-                        eprintln!("AzureWindow: echec du changement de curseur: {err}");
-                    }
-
-                // Copier : la selection du systeme devient la notre, les
-                // autres apps peuvent coller.
-                if s.event.take_clipboard_change()
-                    && let Err(err) = win.set_clipboard(&s.event.clipboard)
-                {
-                    eprintln!("AzureWindow: presse-papiers du systeme indisponible: {err}");
-                }
-
-                if s.dirty && !deja_sale {
-                    s.perf.cause("evenement");
-                }
-                s.perf.temps("evenements", debut_evenement.elapsed());
-                flush_if_dirty(win, s, surface_id);
-                true
+                let mut hote = WaylandHote { win, toplevel: xdg_toplevel_id, surface: surface_id, curseurs: cursors.as_ref() };
+                sur_evenement(&mut state.borrow_mut(), &mut hote, event, &layout)
             },
             |win| {
-                // `kill` (voir azure_core::security::termination) : fermer
-                // comme par le bouton, `on_close` compris.
-                if azure_core::security::termination::requested() {
-                    return false;
-                }
-                let mut s_ref = state.borrow_mut();
-                let s = &mut *s_ref;
-                let content = content_box(s);
-                // Transition CSS en cours (voir `ui::models::transition`) :
-                // l'image suivante au prochain tic.
-                if crate::ui::models::transition::take_pending() {
-                    s.dirty = true;
-                    s.perf.cause("transition");
-                }
-
-                // Nouvel ecran recu via l'un ou l'autre transport de routes
-                // (voir `LoopState::routes`) : remplace `ui_nodes` tel quel,
-                // comme un `.ui(nodes)` rappele en cours de session. Draine
-                // tout ce qui est en attente sur CHACUN (pas juste le
-                // premier) mais ne garde que le tout dernier ecran resolu -
-                // inutile de redessiner pour des routes deja perimees par
-                // une plus recente, qu'elle vienne du meme transport ou de
-                // l'autre.
-                let mut pending_screen = None;
-
-                // INTER-app (voir `navigation` et `AzureWindow::navigation`) :
-                // un thread dedie a deja pousse chaque route decodee dans ce
-                // canal (voir `navigation_manager::listen`).
-                if let Some(incoming) = &s.incoming_routes {
-                    while let Ok(message) = incoming.try_recv() {
-                        match message {
-                            Incoming::Route(route) => {
-                                // Jeton de l'app qui a demande la page :
-                                // la fenetre passe au premier plan.
-                                if !route.activation.is_empty()
-                                    && let Err(err) = win.activate(&route.activation)
-                                {
-                                    eprintln!("AzureWindow: premier plan impossible : {err}");
-                                }
-                                if let Some(table) = &s.routes
-                                    && let Some(nodes) = table.resolve(&route) {
-                                        pending_screen = Some(nodes);
-                                    }
-                            }
-                            // Fenetre envoyee par une autre app (voir
-                            // `WindowContext::send_window`) : ouverte dans
-                            // son propre thread, comme `open_window`.
-                            Incoming::Window(shared) => match shared.to_window() {
-                                Ok(window) => {
-                                    std::thread::spawn(move || window.run());
-                                }
-                                Err(err) => eprintln!("AzureWindow: fenetre recue invalide : {err}"),
-                            },
-                        }
-                    }
-                }
-
-                // Flux ecoutes (voir `AzureWindow::flux`) : AVANT le
-                // sondage intra-app, pour qu'un `ctx.goto` lance par un
-                // rappel prenne effet des ce tic.
-                let mut scrolls = Vec::new();
-                let mut all_effects = Vec::new();
-                for (listener, handler) in s.fluxes.iter_mut() {
-                    for event in listener.poll() {
-                        let values = crate::ui::services::form::form_values(&s.event.ui_nodes);
-                        let mut ctx = WindowContext {
-                            intra: s.intra.as_ref(),
-                            nav: s.nav.as_mut(),
-                            windows: s.windows.as_ref(),
-                            routes: s.routes.as_ref(),
-                            stockage: s.stockage.as_ref(),
-                            app_id: s.owner_app_id,
-                            clicked: None,
-                            values: Some(&values),
-                            scroll_request: None,
-                            effects: Effects::default(),
-                            activation: None,
-                        };
-                        handler(&mut ctx, &event, listener.state());
-                        scrolls.extend(ctx.scroll_request.take());
-                        all_effects.push(std::mem::take(&mut ctx.effects));
-                    }
-                }
-                if let Some(mut tick) = s.on_tick.take() {
-                    let debut = Instant::now();
-                    let (scroll, effects) = with_context(s, None, |ctx| tick(ctx));
-                    s.perf.temps("on_tick", debut.elapsed());
-                    s.on_tick = Some(tick);
-                    scrolls.extend(scroll);
-                    all_effects.push(effects);
-                }
-                for effects in all_effects {
-                    apply_effects(s, effects);
-                }
-                for target in scrolls {
-                    if crate::ui::services::interact::scroll_to_anchor(&mut s.event.ui_nodes, &target, content) {
-                        s.dirty = true;
-                        s.perf.cause("ancre");
-                    }
-                }
-
-                // INTRA-app (voir `AzureWindow::intra`) : sondage non
-                // bloquant de l'`IntraRouter` local, aucun thread ni canal -
-                // voir `intra_navigation_manager::drain`.
-                let debut_ecran = Instant::now();
-                if let Some(intra) = &s.intra
-                    && let Some(table) = &s.routes
-                        && let Some(nodes) = intra_navigation_manager::drain(intra, table) {
-                            pending_screen = Some(nodes);
-                        }
-                if pending_screen.is_some() {
-                    s.perf.temps("nouvel ecran", debut_ecran.elapsed());
-                }
-
-                if let Some(mut nodes) = pending_screen {
-                    if std::mem::take(&mut s.keep_scroll) {
-                        interact::carry_scroll(&s.event.ui_nodes, &mut nodes);
-                    }
-                    s.event.ui_nodes = nodes;
-                    s.event.command_menu = None;
-                    s.flashes.clear();
-                    s.dirty = true;
-                    s.perf.cause("nouvel ecran");
-                }
-                if !s.flashes.is_empty() && end_flashes(s) {
-                    s.dirty = true;
-                    s.perf.cause("flash");
-                }
-
-                // Clignotement du curseur + repetition d'une touche
-                // maintenue : ne dependent que du temps ecoule, pas d'un
-                // evenement recu - voir `dispatch::handle_tick`.
-                let debut = Instant::now();
-                if dispatch::handle_tick(&mut s.event, layout.get(), content) {
-                    s.dirty = true;
-                    s.perf.cause("defilement/curseur/touche");
-                }
-                s.perf.temps("tic", debut.elapsed());
-
-                // C'est aussi ici (appele a chaque tic, ~60Hz) que les
-                // redessins mis en attente par `on_event` (voir
-                // `MIN_PRESENT_INTERVAL`) sont effectivement flushes.
-                flush_if_dirty(win, s, surface_id);
-                s.perf.fin_de_tic();
-                true
+                let mut hote = WaylandHote { win, toplevel: xdg_toplevel_id, surface: surface_id, curseurs: cursors.as_ref() };
+                sur_tic(&mut state.borrow_mut(), &mut hote, &layout)
             },
         )
         .expect("Event loop failed");
@@ -1165,13 +1254,7 @@ impl AzureWindow {
         // d'un `disconnect` qui echoue (connexion deja coupee) est
         // volontairement ignoree, il n'y a rien de plus a faire a ce stade.
         let mut s = state.into_inner();
-        // Derniere chance d'enregistrer ce qui a ete tape (voir `on_close`).
-        if let Some(mut on_close) = s.on_close.take() {
-            with_context(&mut s, None, |ctx| on_close(ctx));
-        }
-        if let Some(nav) = s.nav.as_mut() {
-            let _ = navigation_manager::disconnect(nav);
-        }
+        terminer(&mut s);
 
         // `window.mapped_size()`, pas `width * height * 4` : un
         // redimensionnement en cours de session peut avoir agrandi la

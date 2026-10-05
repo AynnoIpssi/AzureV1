@@ -110,11 +110,16 @@ pub struct Decoration {
     /// Opacite quand le groupe de survol le plus proche au-dessus est
     /// survole, si elle differe de `opacity`.
     pub group_hover_opacity: Option<f32>,
+    /// Ce que l'inspecteur (F12) montre de l'element : balise, classes, id,
+    /// regles rsC (voir `crate::inspector::NodeInfo`). `None` pour un noeud
+    /// construit a la main (pas depuis un .rsh).
+    pub inspect: Option<std::sync::Arc<crate::inspector::NodeInfo>>,
 }
 
 impl Default for Decoration {
     fn default() -> Decoration {
         Decoration {
+            inspect: None,
             fill: None,
             radius: 0.0,
             border: BorderWidths::uniform(0.0),
@@ -166,6 +171,7 @@ impl Decoration {
             drop: String::new(),
             hover_group: false,
             group_hover_opacity: None,
+            inspect: None,
         }
     }
 

@@ -42,6 +42,7 @@ fn collect(nodes: &[UiNode], values: &mut BTreeMap<String, FieldValue>) {
             UiNode::Control(c) => {
                 let value = match c.kind {
                     ControlKind::Checkbox | ControlKind::Switch => Some(FieldValue::Bool(c.checked)),
+                    ControlKind::Toile => None,
                     ControlKind::Slider | ControlKind::Progress | ControlKind::Rating => Some(FieldValue::Number(c.value)),
                     ControlKind::Select | ControlKind::Segmented => c.selected_value().map(|v| FieldValue::Text(v.to_string())),
                     ControlKind::Radio => {

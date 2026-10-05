@@ -24,6 +24,7 @@ impl Home {
             .env("XDG_DATA_HOME", self.dir.join("share"))
             .env("XDG_CONFIG_HOME", self.dir.join("config"))
             .env("XDG_STATE_HOME", self.dir.join("state"))
+            .env("XDG_CACHE_HOME", self.dir.join("cache"))
             // Jamais les daemons qui tourneraient sur la machine.
             .env("AZURE_RUNTIME_DIR", self.dir.join("run"))
             .env("AZURE_SYSTEMCTL", "/usr/bin/true")
@@ -133,17 +134,25 @@ fn install_explains_what_is_missing() {
 #[test]
 fn setup_installs_azure_and_the_dashboard_then_autostart() {
     let home = Home::new("setup");
-    // Un faux projet : target/release avec les binaires, et le vrai dossier
-    // du tableau de bord.
+    // Un faux projet : target/release avec les binaires d'Azure ; le
+    // tableau de bord est une app du dossier des apps, compilee dans le
+    // dossier partage.
     let project = home.dir.join("projet");
     let release = project.join("target/release");
     std::fs::create_dir_all(&release).unwrap();
-    for name in azure_cli::setup::SYSTEM_BINARIES.iter().chain(&["azure_dashboard"]) {
+    for name in azure_cli::setup::SYSTEM_BINARIES {
         std::fs::write(release.join(name), "#!/bin/sh\n").unwrap();
     }
-    azure_cli::copy_all(&Path::new(env!("CARGO_MANIFEST_DIR")).join("../azure-dashboard/app.azure"), &project.join("azure-dashboard/app.azure")).unwrap();
-    azure_cli::copy_all(&Path::new(env!("CARGO_MANIFEST_DIR")).join("../azure-dashboard/ui"), &project.join("azure-dashboard/ui")).unwrap();
-    azure_cli::copy_all(&Path::new(env!("CARGO_MANIFEST_DIR")).join("../azure-dashboard/icone.png"), &project.join("azure-dashboard/icone.png")).unwrap();
+    let dashboard_src = home.dir.join("apps/azure-dashboard");
+    std::fs::create_dir_all(dashboard_src.join("ui")).unwrap();
+    std::fs::write(dashboard_src.join("app.azure"), "[app]\nname = dashboard\ntitle = Azure Dashboard\nexec = azure_dashboard\nfiles = ui\n").unwrap();
+    std::fs::write(dashboard_src.join("ui/tableau.rsh"), "<container><!container>\n").unwrap();
+    std::fs::create_dir_all(dashboard_src.join(".cargo")).unwrap();
+    let shared = home.dir.join("cache/azure/target");
+    std::fs::write(dashboard_src.join(".cargo/config.toml"), format!("[build]\ntarget-dir = \"{}\"\n", shared.display())).unwrap();
+    std::fs::create_dir_all(shared.join("release")).unwrap();
+    std::fs::write(shared.join("release/azure_dashboard"), "#!/bin/sh\n").unwrap();
+    home.ok(&["dossier", home.dir.join("apps").to_str().unwrap()]);
 
     assert!(home.err(&["autostart", "on"]).contains("lancez `azure setup` d'abord"));
     let out = home.ok(&["setup", "--from", release.to_str().unwrap(), "--sans-manager"]);
@@ -211,36 +220,50 @@ fn installing_registers_the_identity_and_keeps_the_id() {
 }
 
 #[test]
-fn new_creates_an_empty_app_in_the_azure_workspace() {
+fn new_creates_an_empty_app_in_the_apps_folder() {
     let home = Home::new("new");
     let source = home.dir.join("Azure");
     std::fs::create_dir_all(source.join("azure-foundation")).unwrap();
     std::fs::write(source.join("azure-foundation/Cargo.toml"), "[package]\n").unwrap();
-    std::fs::write(source.join("Cargo.toml"), "[workspace]\nmembers = [\n    \"azure-foundation\",\n]\n").unwrap();
+    let workspace = "[workspace]\nmembers = [\n    \"azure-foundation\",\n]\n";
+    std::fs::write(source.join("Cargo.toml"), workspace).unwrap();
+    std::fs::create_dir_all(home.share().join("azure")).unwrap();
+    std::fs::write(home.share().join("azure/source"), source.to_str().unwrap()).unwrap();
 
-    assert!(home.err(&["new", "meteo"]).contains("sources d'Azure inconnues"));
-    let out = home.ok(&["new", "meteo-locale", "--azure", source.to_str().unwrap()]);
-    assert!(out.contains("Meteo locale (meteo-locale) creee"), "{out}");
-    let app = source.join("azure-meteo-locale");
+    // Pas de dossier des apps : `azure new` ne se rabat PAS sur les sources.
+    assert!(home.err(&["new", "meteo"]).contains("dossier des apps inconnu"));
+    // Ni dossier des apps, ni --dans dans les sources d'Azure.
+    assert!(home.err(&["dossier", source.join("apps").to_str().unwrap()]).contains("dans les sources d'Azure"));
+    assert!(home.err(&["new", "meteo", "--dans", source.to_str().unwrap()]).contains("dans les sources d'Azure"));
+
+    let apps = home.dir.join("Bureau");
+    assert!(home.ok(&["dossier", apps.to_str().unwrap()]).contains("dossier des apps"));
+    assert_eq!(home.ok(&["dossier"]).trim(), apps.canonicalize().unwrap().to_str().unwrap());
+
+    let out = home.ok(&["new", "meteo-locale"]);
+    assert!(out.contains("Meteo locale (meteo-locale) creee") && out.contains("azure build meteo-locale --installer"), "{out}");
+    let app = apps.join("azure-meteo-locale");
     let manifest = std::fs::read_to_string(app.join("app.azure")).unwrap();
     assert!(manifest.contains("name = meteo-locale") && manifest.contains("exec = azure_meteo_locale"), "{manifest}");
-    assert!(std::fs::read_to_string(app.join("Cargo.toml")).unwrap().contains("path = \"../azure-foundation\""));
+    let cargo = std::fs::read_to_string(app.join("Cargo.toml")).unwrap();
+    assert!(cargo.contains(&format!("path = \"{}\"", source.canonicalize().unwrap().join("azure-foundation").display())), "{cargo}");
+    assert!(cargo.contains("[profile.dev.package.azure-engine]\nopt-level = 3"), "{cargo}");
+    let config = std::fs::read_to_string(app.join(".cargo/config.toml")).unwrap();
+    assert!(config.contains(&format!("target-dir = \"{}\"", home.dir.join("cache/azure/target").display())), "{config}");
     assert!(app.join("src/main.rs").is_file() && app.join("ui/accueil.rsh").is_file() && app.join("ui/app.rsc").is_file());
-    let workspace = std::fs::read_to_string(source.join("Cargo.toml")).unwrap();
-    assert!(workspace.contains("    \"azure-foundation\",\n    \"azure-meteo-locale\",\n]"), "{workspace}");
+    // Les sources d'Azure ne sont pas touchees.
+    assert_eq!(std::fs::read_to_string(source.join("Cargo.toml")).unwrap(), workspace);
     // Le manifeste genere est valide.
     azure_manager::models::manifest::Manifest::load(&app.join("app.azure")).unwrap();
 
-    assert!(home.err(&["new", "meteo-locale", "--azure", source.to_str().unwrap()]).contains("existe deja"));
-    assert!(home.err(&["new", "Meteo", "--azure", source.to_str().unwrap()]).contains("Nom d'app invalide"));
+    assert!(home.err(&["new", "meteo-locale"]).contains("existe deja"));
+    assert!(home.err(&["new", "Meteo"]).contains("Nom d'app invalide"));
 
-    // Ailleurs : chemin absolu vers azure-foundation, workspace inchange.
+    // Ailleurs avec --dans : la commande de compilation donne le chemin.
     std::fs::create_dir_all(home.dir.join("ailleurs")).unwrap();
-    home.ok(&["new", "jeu", "--titre", "Mon jeu", "--dans", home.dir.join("ailleurs").to_str().unwrap(), "--azure", source.to_str().unwrap()]);
-    let cargo = std::fs::read_to_string(home.dir.join("ailleurs/azure-jeu/Cargo.toml")).unwrap();
-    assert!(cargo.contains(&format!("path = \"{}\"", source.canonicalize().unwrap().join("azure-foundation").display())), "{cargo}");
+    let out = home.ok(&["new", "jeu", "--titre", "Mon jeu", "--dans", home.dir.join("ailleurs").to_str().unwrap()]);
+    assert!(out.contains(&format!("azure build {} --installer", home.dir.join("ailleurs/azure-jeu").canonicalize().unwrap().display())), "{out}");
     assert!(std::fs::read_to_string(home.dir.join("ailleurs/azure-jeu/app.azure")).unwrap().contains("title = Mon jeu"));
-    assert!(!std::fs::read_to_string(source.join("Cargo.toml")).unwrap().contains("azure-jeu"));
 }
 
 #[test]
@@ -250,13 +273,20 @@ fn build_compiles_then_installs() {
     std::fs::create_dir_all(source.join("azure-foundation")).unwrap();
     std::fs::write(source.join("azure-foundation/Cargo.toml"), "[package]\n").unwrap();
     std::fs::write(source.join("Cargo.toml"), "[workspace]\nmembers = [\n]\n").unwrap();
-    home.ok(&["new", "meteo", "--azure", source.to_str().unwrap()]);
     std::fs::create_dir_all(home.share().join("azure")).unwrap();
     std::fs::write(home.share().join("azure/source"), source.to_str().unwrap()).unwrap();
+    let apps = home.dir.join("apps");
+    home.ok(&["dossier", apps.to_str().unwrap()]);
+    home.ok(&["new", "meteo"]);
+    // Un binaire perime a cote (ancien `target` d'un projet parent) : jamais
+    // pris a la place de celui du dossier de compilation partage.
+    std::fs::create_dir_all(home.dir.join("target/release")).unwrap();
+    std::fs::write(home.dir.join("target/release/azure_meteo"), "perime").unwrap();
 
-    // Un faux cargo : "compile" en ecrivant le binaire la ou cargo le mettrait.
+    // Un faux cargo : "compile" en ecrivant le binaire la ou cargo le
+    // mettrait (le `target-dir` partage de l'app).
     let cargo = home.dir.join("cargo");
-    std::fs::write(&cargo, "#!/bin/sh\necho \"cargo $* dans $(basename $PWD)\"\necho '   Compiling azure-meteo' >&2\nmkdir -p ../target/release\nprintf '#!/bin/sh\\n' > ../target/release/azure_meteo\nchmod +x ../target/release/azure_meteo\n").unwrap();
+    std::fs::write(&cargo, "#!/bin/sh\necho \"cargo $* dans $(basename $PWD)\"\necho '   Compiling azure-meteo' >&2\nmkdir -p $XDG_CACHE_HOME/azure/target/release\nprintf '#!/bin/sh\\n' > $XDG_CACHE_HOME/azure/target/release/azure_meteo\nchmod +x $XDG_CACHE_HOME/azure/target/release/azure_meteo\n").unwrap();
     std::fs::set_permissions(&cargo, std::fs::Permissions::from_mode(0o755)).unwrap();
     let run = |args: &[&str]| home_cmd(&home, &cargo, args);
 
@@ -268,10 +298,11 @@ fn build_compiles_then_installs() {
     assert!(text.contains("Compiling azure-meteo") && text.contains("ensuite : azure install"), "{text}");
     assert!(!home.share().join("azure/apps/meteo").exists());
 
-    let out = run(&["build", source.join("azure-meteo").to_str().unwrap(), "--installer", "--sans-manager"]);
+    let out = run(&["build", apps.join("azure-meteo").to_str().unwrap(), "--installer", "--sans-manager"]);
     assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
     assert!(String::from_utf8_lossy(&out.stdout).contains("Meteo (meteo) installee"));
-    assert!(home.share().join("azure/apps/meteo/azure_meteo").is_file());
+    let installed = std::fs::read_to_string(home.share().join("azure/apps/meteo/azure_meteo")).unwrap();
+    assert_eq!(installed, "#!/bin/sh\n", "le binaire du target-dir, pas le perime");
 
     let out = run(&["build", "inconnue"]);
     assert!(String::from_utf8_lossy(&out.stderr).contains("ni un dossier d'app"));
@@ -290,6 +321,7 @@ fn home_cmd(home: &Home, cargo: &Path, args: &[&str]) -> Output {
         .env("XDG_DATA_HOME", home.share())
         .env("XDG_CONFIG_HOME", home.dir.join("config"))
         .env("XDG_STATE_HOME", home.dir.join("state"))
+        .env("XDG_CACHE_HOME", home.dir.join("cache"))
         .env("AZURE_RUNTIME_DIR", home.dir.join("run"))
         .env("AZURE_SYSTEMCTL", "/usr/bin/true")
         .env("CARGO", cargo)

@@ -18,6 +18,8 @@ pub enum ControlKind {
     Segmented,
     /// Note de 1 a `max` (pastilles cliquables).
     Rating,
+    /// Surface de dessin facon draw.io (voir `ui::models::toile`).
+    Toile,
 }
 
 impl ControlKind {
@@ -31,6 +33,7 @@ impl ControlKind {
             "select" | "dropdown" => ControlKind::Select,
             "segmented" => ControlKind::Segmented,
             "rating" | "stars" => ControlKind::Rating,
+            "toile" | "canvas" => ControlKind::Toile,
             _ => return None,
         })
     }
@@ -79,6 +82,8 @@ pub struct Control {
     pub track: Color,
     pub text_color: Color,
     pub font_size: f32,
+    /// Le dessin et la vue d'une toile (`ControlKind::Toile`).
+    pub toile: Option<Box<crate::ui::models::toile::Toile>>,
 }
 
 pub const DEFAULT_ACCENT: Color = Color::new(201, 168, 120, 255);
@@ -111,6 +116,7 @@ impl Control {
             track: DEFAULT_TRACK,
             text_color: DEFAULT_TEXT,
             font_size: 14.0,
+            toile: None,
         }
     }
 

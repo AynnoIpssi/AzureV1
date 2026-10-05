@@ -239,6 +239,7 @@ thread_local! {
     static RESOLVED: std::cell::RefCell<std::collections::HashMap<String, ComputedStyle>> = Default::default();
     static SIBLING_RULES: std::cell::Cell<Option<(usize, usize, bool)>> = const { std::cell::Cell::new(None) };
     static IDS_USED: std::cell::RefCell<Option<((usize, usize), std::collections::HashSet<String>)>> = const { std::cell::RefCell::new(None) };
+    static MATCHED: std::cell::RefCell<std::collections::HashMap<String, std::sync::Arc<Vec<MatchedRule>>>> = Default::default();
 }
 
 /// Une regle de la feuille vise-t-elle l'id `id` ?
@@ -258,6 +259,7 @@ fn id_used(sheet: &RscStylesheet, id: &str) -> bool {
 /// ecran (voir `interpreter::build_ui_with_context`).
 pub fn clear_resolve_cache() {
     RESOLVED.with(|c| c.borrow_mut().clear());
+    MATCHED.with(|c| c.borrow_mut().clear());
     SIBLING_RULES.with(|s| s.set(None));
     IDS_USED.with(|c| *c.borrow_mut() = None);
 }
@@ -1051,5 +1053,173 @@ fn track_list_of(value: Option<&Value>) -> Option<Vec<Track>> {
     match value? {
         Value::List(items) => Some(items.iter().filter_map(track_of).collect()),
         single => track_of(single).map(|t| vec![t]),
+    }
+}
+
+// --- Inspecteur (F12, voir `crate::inspector`) : les regles qui s'appliquent
+// a un element, comme le panneau « Styles » de Chrome.
+
+/// Une regle rsC qui vise un element : son selecteur (celui qui a matche,
+/// tel qu'ecrit), l'etat dans lequel elle s'applique (`""`, `":hover"`,
+/// `":focus"`, `":active"`) et ses declarations `(propriete, valeur,
+/// ecrasee)` - ecrasee = une autre regle plus forte fixe la meme propriete.
+#[derive(Debug, Clone, PartialEq)]
+pub struct MatchedRule {
+    pub selector: String,
+    pub state: &'static str,
+    pub declarations: Vec<(String, String, bool)>,
+}
+
+/// Les regles de `sheet` qui visent `element`, la plus forte d'abord (ordre
+/// de Chrome) ; puis celles qui ne s'appliquent qu'au survol, au focus ou a
+/// l'appui.
+pub fn matched_rules(sheet: &RscStylesheet, ancestors: &[ElementInfo], preceding: &[ElementInfo], element: &ElementInfo) -> Vec<MatchedRule> {
+    let base = PseudoState::default();
+    let matching = |pseudo: PseudoState| -> Vec<(Specificity, usize, &ComplexSelector)> {
+        sheet
+            .rules
+            .iter()
+            .enumerate()
+            .filter_map(|(i, rule)| {
+                rule.selectors
+                    .iter()
+                    .filter(|s| complex_matches(s, ancestors, preceding, element, pseudo, base))
+                    .max_by_key(|s| s.specificity())
+                    .map(|s| (s.specificity(), i, s))
+            })
+            .collect()
+    };
+
+    let mut normal = matching(base);
+    // Ordre d'application (le dernier gagne), `!important` en second.
+    normal.sort_by_key(|(spec, i, _)| (*spec, *i));
+    let mut winner: std::collections::HashMap<&str, (bool, usize, usize)> = Default::default();
+    for (pass_important, pass) in [(false, 0), (true, 1)] {
+        for (rank, (_, i, _)) in normal.iter().enumerate() {
+            for (d, decl) in sheet.rules[*i].declarations.iter().enumerate() {
+                if decl.important == pass_important {
+                    winner.insert(decl.name.as_str(), (decl.important, rank * 1000 + d, pass));
+                }
+            }
+        }
+    }
+    let mut out: Vec<MatchedRule> = normal
+        .iter()
+        .enumerate()
+        .rev()
+        .map(|(rank, (_, i, selector))| MatchedRule {
+            selector: selector_text(selector),
+            state: "",
+            declarations: sheet.rules[*i]
+                .declarations
+                .iter()
+                .enumerate()
+                .map(|(d, decl)| {
+                    let wins = winner.get(decl.name.as_str()).is_some_and(|(_, at, _)| *at == rank * 1000 + d);
+                    let important = if decl.important { " !important" } else { "" };
+                    (decl.name.clone(), format!("{}{important}", value_text(&decl.value)), !wins)
+                })
+                .collect(),
+        })
+        .collect();
+
+    // Une regle :hover matche aussi pendant :active : une seule fois.
+    let mut seen: std::collections::HashSet<usize> = normal.iter().map(|(_, i, _)| *i).collect();
+    for (state, pseudo) in [
+        (":hover", PseudoState { hover: true, focus: false, active: false }),
+        (":focus", PseudoState { hover: false, focus: true, active: false }),
+        (":active", PseudoState { hover: true, focus: false, active: true }),
+    ] {
+        let mut extra = matching(pseudo);
+        extra.retain(|(_, i, _)| seen.insert(*i));
+        extra.sort_by_key(|(spec, i, _)| std::cmp::Reverse((*spec, *i)));
+        for (_, i, selector) in extra {
+            out.push(MatchedRule {
+                selector: selector_text(selector),
+                state,
+                declarations: sheet.rules[i].declarations.iter().map(|d| (d.name.clone(), value_text(&d.value), false)).collect(),
+            });
+        }
+    }
+    out
+}
+
+/// `matched_rules`, memorise comme `resolve_element_in` (meme cle : les
+/// lignes d'une liste partagent leurs regles).
+pub fn matched_rules_cached(sheet: &RscStylesheet, ancestors: &[ElementInfo], preceding: &[ElementInfo], element: &ElementInfo) -> std::sync::Arc<Vec<MatchedRule>> {
+    if !preceding.is_empty() && has_sibling_rules(sheet) {
+        return std::sync::Arc::new(matched_rules(sheet, ancestors, preceding, element));
+    }
+    use std::fmt::Write;
+    let mut key = format!("{:x}|", sheet as *const RscStylesheet as usize);
+    let id_of = |id: &str| if !id.is_empty() && id_used(sheet, id) { id.to_string() } else { String::new() };
+    for a in ancestors {
+        let _ = write!(key, "{}.{}#{}>", a.tag, a.classes.join("."), id_of(&a.id));
+    }
+    let _ = write!(key, "{}.{}#{}", element.tag, element.classes.join("."), id_of(&element.id));
+    if let Some(hit) = MATCHED.with(|c| c.borrow().get(&key).cloned()) {
+        return hit;
+    }
+    let rules = std::sync::Arc::new(matched_rules(sheet, ancestors, preceding, element));
+    MATCHED.with(|c| c.borrow_mut().insert(key, rules.clone()));
+    rules
+}
+
+/// Un selecteur tel qu'on l'ecrit : `.carte > button.btn:hover`.
+pub fn selector_text(selector: &ComplexSelector) -> String {
+    let mut out = String::new();
+    for (simple, combinator) in &selector.parts {
+        if let Some(tag) = &simple.tag {
+            out.push_str(tag);
+        } else if simple.universal {
+            out.push('*');
+        }
+        if let Some(id) = &simple.id {
+            out.push('#');
+            out.push_str(id);
+        }
+        for class in &simple.classes {
+            out.push('.');
+            out.push_str(class);
+        }
+        for pseudo in &simple.pseudo_classes {
+            out.push(':');
+            out.push_str(pseudo);
+        }
+        out.push_str(match combinator {
+            Some(Combinator::Descendant) => " ",
+            Some(Combinator::Child) => " > ",
+            Some(Combinator::AdjacentSibling) => " + ",
+            Some(Combinator::GeneralSibling) => " ~ ",
+            None => "",
+        });
+    }
+    out
+}
+
+/// Une valeur rsC telle qu'on l'ecrit : `12px`, `#1e1e1e`, `rgba(...)`.
+pub fn value_text(value: &Value) -> String {
+    let number = |n: f32| if n.fract() == 0.0 { format!("{}", n as i64) } else { format!("{n}") };
+    match value {
+        Value::Length(n, unit) => {
+            let unit = match unit {
+                Unit::Px => "px",
+                Unit::Percent => "%",
+                Unit::Em => "em",
+                Unit::Rem => "rem",
+                Unit::Vw => "vw",
+                Unit::Vh => "vh",
+                Unit::Fr => "fr",
+                Unit::Unknown(u) => u.as_str(),
+            };
+            format!("{}{unit}", number(*n))
+        }
+        Value::Number(n) => number(*n),
+        Value::Color(c) if c.a == 255 => format!("#{:02x}{:02x}{:02x}", c.r, c.g, c.b),
+        Value::Color(c) => format!("rgba({}, {}, {}, {})", c.r, c.g, c.b, number((c.a as f32 / 255.0 * 100.0).round() / 100.0)),
+        Value::Keyword(k) => k.clone(),
+        Value::Str(s) => format!("\"{s}\""),
+        Value::List(items) => items.iter().map(value_text).collect::<Vec<_>>().join(" "),
+        Value::Function(name, args) => format!("{name}({})", args.iter().map(value_text).collect::<Vec<_>>().join(", ")),
     }
 }

@@ -139,6 +139,19 @@ pub fn button_at(window_width: u32, layout: &ButtonLayout, x: i32, y: i32) -> Op
 /// commence bien apres l'en-tete plutot que de se dessiner derriere.
 /// Independant de `ButtonLayout` : la hauteur de l'en-tete ne change pas
 /// selon le cote des boutons.
+/// Le bouton « Inspecter » (ouvre l'inspecteur, voir `crate::inspector`), a
+/// droite de la barre : F12 est souvent une touche multimedia sur un
+/// portable, il faut pouvoir l'ouvrir a la souris.
+pub fn inspect_button(window_width: u32) -> (u32, u32, u32, u32) {
+    (window_width.saturating_sub(88), 4, 80, HEADER_HEIGHT - 8)
+}
+
+/// `(x, y)` est-il sur le bouton « Inspecter » ?
+pub fn on_inspect_button(window_width: u32, x: i32, y: i32) -> bool {
+    let (bx, by, bw, bh) = inspect_button(window_width);
+    x >= bx as i32 && y >= by as i32 && x < (bx + bw) as i32 && y < (by + bh) as i32
+}
+
 pub fn content_box(window_width: u32, window_height: u32) -> (u32, u32, u32, u32) {
     (0, HEADER_HEIGHT, window_width, window_height.saturating_sub(HEADER_HEIGHT))
 }

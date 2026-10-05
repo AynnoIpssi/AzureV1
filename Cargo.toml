@@ -2,26 +2,22 @@
 members = [
     "azure-cli",
     "azure-core",
-    "azure-dashboard",
-    "azure-docs",
     "azure-engine",
     "azure-foundation",
     "azure-rooter",
     "azure-service",
     "azure-manager",
-    "azure-note",
     "azure-provider",
     "azure-stockage",
     "azure-test/app-test/app-a",
     "azure-test/app-test/app-b",
     "azure-test/app-test/app-c",
-    "azure-ide",
-    "azure-portfolio",
-    "azure-meteo",
-    "azure-testeur",
-    "azure-practice",
 ]
 resolver = "2"
+
+# Les apps (tableau de bord, Docs, Note, Testeur...) ne sont PAS ici : elles
+# vivent dans le dossier des apps (`azure dossier`, ~/Bureau/Application), chacune avec
+# son Cargo.toml qui pointe vers ces sources. Voir azure-cli/src/new.rs.
 
 # Le rendu est fait a la main, pixel par pixel (azure-engine) : sans
 # optimisation, une image prend ~10x plus de temps (mesure : ~30ms au lieu

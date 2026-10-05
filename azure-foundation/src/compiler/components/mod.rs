@@ -435,6 +435,18 @@ fn build_control(kind: ControlKind, tag: &str, class: &str, id: &str, attrs: &[(
                 .min(options.len().saturating_sub(1));
             control.options = options;
         }
+        // `valeur` : le dessin (`toile::Dessin::encoder`) ; `choisi` : la
+        // boite mise en avant ; `mode="relier"`.
+        ControlKind::Toile => {
+            let mut t = crate::ui::models::toile::Toile::default();
+            t.dessin = crate::ui::models::toile::Dessin::decoder(&attr(attrs, "valeur", ctx).unwrap_or_default());
+            t.choisi = attr(attrs, "choisi", ctx).filter(|c| !c.is_empty());
+            t.relier = attr(attrs, "mode", ctx).as_deref() == Some("relier");
+            t.vue = attr(attrs, "vue", ctx).unwrap_or_default();
+            t.focus = attr(attrs, "focus", ctx).is_some_and(|f| f == "survol" || f == "oui");
+            t.a_cadrer = !t.vue.is_empty();
+            control.toile = Some(Box::new(t));
+        }
         _ => {}
     }
     out.push(UiNode::Control(control));

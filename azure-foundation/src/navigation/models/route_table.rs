@@ -45,11 +45,16 @@ impl Router<Vec<UiNode>> {
     /// chemin et `payload` s'y ajoutent.
     pub fn view_with(self, path: &str, rsh_file: &str, rsc_file: &str, data: impl Fn(&Request) -> Context + Send + 'static) -> RouteTable {
         let (rsh_file, rsc_file) = (rsh_file.to_string(), rsc_file.to_string());
-        self.route(path, move |request| match load_view(&rsh_file, &rsc_file, request, data(request)) {
-            Ok(nodes) => nodes,
-            Err(err) => {
-                eprintln!("RouteTable: vue '{}' : {err}", request.path);
-                Vec::new()
+        self.route(path, move |request| {
+            // Ce que coute la page (voir `perf`) : les donnees de l'app, puis
+            // la construction par la fondation.
+            let donnees = crate::perf::mesurer("Données de page", &request.path, || data(request));
+            match crate::perf::mesurer("Page", &request.path, || load_view(&rsh_file, &rsc_file, request, donnees)) {
+                Ok(nodes) => nodes,
+                Err(err) => {
+                    eprintln!("RouteTable: vue '{}' : {err}", request.path);
+                    Vec::new()
+                }
             }
         })
     }

@@ -48,6 +48,7 @@
 // ecriture = ~/Documents/Boutique # dossiers ou elle ecrit
 // reseau = true                   # connexions TCP (coupees sinon)
 // stockage = false                # pas de stockage Azure
+// processus = true                # voir les autres processus (/proc, lecture)
 // ```
 //
 // Les chemins de fichiers sont relatifs au dossier du manifeste.
@@ -122,6 +123,11 @@ pub struct Permissions {
     pub write: Vec<PathBuf>,
     pub network: bool,
     pub storage: bool,
+    /// Voir les autres processus (lire /proc : un moniteur). Sans elle,
+    /// l'app est seule dans son espace de processus. Elle ne peut de toute
+    /// facon viser aucun processus (signaux), voir
+    /// `azure_core::security::isolation`.
+    pub processes: bool,
     /// `false` : pas enfermee (seulement en developpement, jamais pour une
     /// app installee).
     pub sandbox: bool,
@@ -129,7 +135,7 @@ pub struct Permissions {
 
 impl Default for Permissions {
     fn default() -> Permissions {
-        Permissions { read: Vec::new(), write: Vec::new(), network: false, storage: true, sandbox: true }
+        Permissions { read: Vec::new(), write: Vec::new(), network: false, storage: true, processes: false, sandbox: true }
     }
 }
 
@@ -185,6 +191,9 @@ impl Permissions {
         let mut parts = Vec::new();
         parts.push(if self.network { "reseau" } else { "sans reseau" }.to_string());
         parts.push(if self.storage { "stockage" } else { "sans stockage" }.to_string());
+        if self.processes {
+            parts.push("voit les autres processus".to_string());
+        }
         if !self.read.is_empty() {
             parts.push(format!("lit {}", self.read.iter().map(|p| p.display().to_string()).collect::<Vec<_>>().join(", ")));
         }
@@ -412,6 +421,7 @@ impl Manifest {
                     "ecriture" | "write" => m.permissions.write = list(value).iter().map(|p| expand(p)).collect(),
                     "reseau" | "network" => m.permissions.network = parse_bool(value).map_err(at)?,
                     "stockage" | "storage" => m.permissions.storage = parse_bool(value).map_err(at)?,
+                    "processus" | "processes" => m.permissions.processes = parse_bool(value).map_err(at)?,
                     "bac_a_sable" | "sandbox" => m.permissions.sandbox = parse_bool(value).map_err(at)?,
                     _ => return unknown(),
                 },

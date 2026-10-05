@@ -10,8 +10,8 @@ pub const SYSTEM_BINARIES: &[&str] = &["azure", "azure_provider", "routeur_daemo
 
 /// Copie les binaires d'Azure de `from` (ex. `target/release`) vers
 /// `bin/`, fait le lien `~/.local/bin/azure`, et installe le tableau de
-/// bord s'il est trouve (`<projet>/azure-dashboard`). Retourne les
-/// remarques a afficher.
+/// bord s'il est trouve (`<dossier des apps>/azure-dashboard`, compile).
+/// Retourne les remarques a afficher.
 pub fn setup(paths: &Paths, from: &Path, manager: ManagerAccess) -> Result<Vec<String>, String> {
     let missing: Vec<&str> = SYSTEM_BINARIES.iter().copied().filter(|name| !from.join(name).is_file()).collect();
     if !missing.is_empty() {
@@ -40,15 +40,19 @@ pub fn setup(paths: &Paths, from: &Path, manager: ManagerAccess) -> Result<Vec<S
         std::fs::write(&file, project.to_string_lossy().as_bytes()).map_err(|e| format!("{} : {e}", file.display()))?;
         notes.push(format!("sources d'Azure notees : {}", project.display()));
     }
-    // Le tableau de bord : `<projet>/azure-dashboard`.
-    let dashboard = from.ancestors().nth(2).map(|project| project.join("azure-dashboard"));
-    match dashboard.filter(|d| d.join("app.azure").exists()) {
-        Some(dir) if from.join("azure_dashboard").is_file() => {
-            let (app, more) = install(paths, &dir, Some(&from.join("azure_dashboard")), manager)?;
+    // Le tableau de bord : une app comme les autres, dans le dossier des
+    // apps. Son binaire : celui de sa compilation (`target-dir`), sinon
+    // `from`.
+    let dashboard = crate::new::apps_dir(paths).ok().map(|apps| apps.join("azure-dashboard")).filter(|d| d.join("app.azure").is_file());
+    let binary = dashboard.as_ref().and_then(|dir| crate::install::find_app_binary(dir, "azure_dashboard")).or_else(|| Some(from.join("azure_dashboard")).filter(|b| b.is_file()));
+    match (dashboard, binary) {
+        (Some(dir), Some(binary)) => {
+            let (app, more) = install(paths, &dir, Some(&binary), manager)?;
             notes.push(format!("tableau de bord installe : {}", app.exe.display()));
             notes.extend(more);
         }
-        _ => notes.push("tableau de bord non trouve (azure install <dossier azure-dashboard> plus tard)".to_string()),
+        (Some(_), None) => notes.push("tableau de bord pas encore compile : azure build dashboard --installer".to_string()),
+        (None, _) => notes.push("tableau de bord non trouve (azure dossier <dossier des apps>, puis azure build dashboard --installer)".to_string()),
     }
     Ok(notes)
 }

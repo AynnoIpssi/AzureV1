@@ -376,6 +376,12 @@ fn layout_literal(style: &Style) -> String {
 pub fn decoration_for(tag: &str, class: &str, id: &str, style: &Style, source: &StyleSource, ancestors: &[ElementInfo], preceding: &[ElementInfo]) -> Decoration {
     let mut decoration = Decoration::from_style(style);
     decoration.anchor = id.to_string();
+    // Pour l'inspecteur (F12) : qui est cet element, quelles regles le visent.
+    let rules = match source {
+        StyleSource::Rsc(sheet) => link::matched_rules_cached(sheet, ancestors, preceding, &ElementInfo::new(tag, class, id)),
+        StyleSource::Legacy(_) => Default::default(),
+    };
+    decoration.inspect = Some(std::sync::Arc::new(crate::inspector::NodeInfo { tag: tag.to_string(), class: class.to_string(), id: id.to_string(), rules }));
     match tag {
         "button" | "textarea" => {
             decoration.hover_fill = resolve_pseudo_fill(tag, class, id, style, source, ancestors, preceding, PseudoState { hover: true, focus: false, active: false });
@@ -404,7 +410,9 @@ pub fn decoration_for(tag: &str, class: &str, id: &str, style: &Style, source: &
     decoration
 }
 
-fn emit_decoration(kind: &str, decoration: Decoration, out: &mut String, level: usize, var: &str) {
+fn emit_decoration(kind: &str, mut decoration: Decoration, out: &mut String, level: usize, var: &str) {
+    // L'inspecteur ne passe pas dans le code genere.
+    decoration.inspect = None;
     if decoration == Decoration::default() {
         return;
     }

@@ -76,7 +76,11 @@ fn describe(nodes: &[azure_foundation::ui::models::ui_node::UiNode], out: &mut V
             n.layout().css.as_ref().map(|c| (c.display, c.width, c.height, c.margin, c.padding, c.border, c.flex_grow, c.align_items, c.justify_content)),
             n.layout().css.as_ref().map(|c| (c.fixed, c.position, c.inset, c.z_index, c.align_content, n.layout().overflow_x))
         );
-        let deco = format!("{:?}", n.decoration());
+        // Ce que l'inspecteur (F12) sait d'un element n'existe que cote
+        // interpreteur : hors de la comparaison.
+        let mut deco = n.decoration().clone();
+        deco.inspect = None;
+        let deco = format!("{deco:?}");
         match n {
             UiNode::Label(l) => out.push(format!("L {:?} {:?} {} {} {:?} {css} {deco}", l.text, l.color, l.font_size, l.weight, l.text_style.as_ref().map(|t| (t.font, t.line_height, t.align, t.white_space, t.options, t.decoration)))),
             UiNode::Button(b) => out.push(format!("B {:?} {:?} {:?} {} {:?} {:?} {css} {deco}", b.text, b.color, b.text_color, b.font_size, b.hover_text_color, b.text_style.as_ref().map(|t| (t.line_height, t.align, t.white_space)))),

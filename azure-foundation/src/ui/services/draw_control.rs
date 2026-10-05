@@ -44,6 +44,7 @@ pub fn natural_width(control: &Control) -> f32 {
         ControlKind::Select => control.options.iter().map(|(_, l)| text_width(l, control.font_size)).fold(120.0, f32::max) + 44.0,
         ControlKind::Segmented => control.options.iter().map(|(_, l)| text_width(l, control.font_size) + 2.0 * SEGMENT_PAD).sum::<f32>() + 4.0,
         ControlKind::Rating => rating_count(control) as f32 * (DOT + DOT_GAP) - DOT_GAP + label,
+        ControlKind::Toile => 480.0,
     }
 }
 
@@ -55,6 +56,7 @@ pub fn natural_height(control: &Control) -> f32 {
         ControlKind::Progress => 8.0,
         ControlKind::Select => SELECT_H,
         ControlKind::Segmented => 32.0,
+        ControlKind::Toile => 320.0,
     }
 }
 
@@ -142,7 +144,13 @@ pub fn draw_control(control: &Control, own_box: Rect, canvas: &mut Canvas, mouse
     let cy = y + h / 2.0;
     let hovered = mouse_x >= own_box.0 && mouse_y >= own_box.1 && mouse_x < own_box.0 + own_box.2 as i32 && mouse_y < own_box.1 + own_box.3 as i32;
     let accent = if control.disabled { dim(control.accent, 110) } else { control.accent };
+    if let (ControlKind::Toile, Some(toile)) = (control.kind, control.toile.as_deref()) {
+        crate::ui::services::draw_toile::draw_toile(toile, own_box, canvas);
+        return;
+    }
     match control.kind {
+        // Dessinee plus haut (sans dessin : rien).
+        ControlKind::Toile => {}
         ControlKind::Checkbox => {
             let (bx, by) = (x, cy - BOX / 2.0);
             if control.checked {

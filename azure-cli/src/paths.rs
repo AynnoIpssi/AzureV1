@@ -13,6 +13,8 @@ pub struct Paths {
     pub logs: PathBuf,
     /// `~/.local/bin`
     pub local_bin: PathBuf,
+    /// `~/.cache/azure`
+    pub cache: PathBuf,
 }
 
 fn xdg(var: &str, fallback: &str) -> PathBuf {
@@ -35,6 +37,7 @@ impl Paths {
             systemd: xdg("XDG_CONFIG_HOME", ".config").join("systemd/user"),
             logs: xdg("XDG_STATE_HOME", ".local/state").join("azure/apps"),
             local_bin: home().join(".local/bin"),
+            cache: xdg("XDG_CACHE_HOME", ".cache").join("azure"),
         }
     }
 
@@ -54,6 +57,13 @@ impl Paths {
     /// `azure_provider::services_dir`).
     pub fn services(&self, name: &str) -> PathBuf {
         self.root.join("services").join(format!("{name}.conf"))
+    }
+
+    /// Dossier de compilation partage par toutes les apps (leur
+    /// `.cargo/config.toml` y pointe) : sans lui, chaque app recompilerait
+    /// tout le moteur d'Azure dans son propre `target`.
+    pub fn shared_target(&self) -> PathBuf {
+        self.cache.join("target")
     }
 
     pub fn desktop(&self, name: &str) -> PathBuf {

@@ -66,6 +66,10 @@ pub struct EventState {
     pub tooltip: Option<(String, i32, i32)>,
     /// Depuis quand la souris n'a pas bouge.
     pub still_since: Instant,
+    /// L'infobulle a deja ete cherchee depuis que la souris est immobile :
+    /// la chercher refait la mise en page de l'ecran, pas a chaque tic.
+    /// Remis a `false` quand la souris bouge ou que l'ecran change.
+    pub tooltip_sought: bool,
     /// Barre de defilement tenue a la souris (voir `interact::scrollbar_grab`).
     pub scroll_drag: Option<crate::ui::services::interact::ScrollDrag>,
     /// Selection du texte affiche en cours (voir `interact::select`).
@@ -113,6 +117,7 @@ impl EventState {
             tooltip: None,
             scroll_drag: None,
             still_since: Instant::now(),
+            tooltip_sought: false,
             text_selection: None,
             last_click: None,
             clipboard_changed: false,
