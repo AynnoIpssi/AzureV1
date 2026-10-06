@@ -24,6 +24,17 @@ pub const WRITE_SHARED: u32 = 23;
 pub const SHARED_LIST: u32 = 24;
 /// Texte RsS + parametres + comptes -> un resultat par instruction.
 pub const RSS: u32 = 30;
+// Reserve a l'app admin des donnees (Azure Data, voir `daemon::Options`) :
+/// Les apps qui ont un espace : id, nom, nombre de tables et de cles.
+pub const ADMIN_APPS: u32 = 40;
+/// Comme RSS, mais au nom de l'app `owner` (ses tables privees).
+pub const ADMIN_RSS: u32 = 41;
+/// Les tables de `owner` : colonnes, index, partage, nombre de lignes.
+pub const ADMIN_SCHEMA: u32 = 42;
+/// Les cles privees de `owner` et la taille de leur valeur.
+pub const ADMIN_KEYS: u32 = 43;
+/// La valeur d'une cle privee de `owner`.
+pub const ADMIN_GET: u32 = 44;
 
 // Une valeur maximale + de quoi porter les autres champs.
 const MAX_FRAME: usize = MAX_VALUE_LEN + 64 * 1024;

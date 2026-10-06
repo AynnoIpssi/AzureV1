@@ -208,7 +208,7 @@ impl Parser {
         loop {
             let col_name = self.name()?;
             let type_name = self.name()?;
-            let ty = DataType::from_name(&type_name).ok_or_else(|| self.error(&format!("type inconnu '{type_name}' (INT, FLOAT, TEXT, BOOL)")))?;
+            let ty = DataType::from_name(&type_name).ok_or_else(|| self.error(&format!("type inconnu '{type_name}' (INT, FLOAT, TEXT, BOOL, BLOB, ANY)")))?;
             // VARCHAR(255) : la taille est acceptee et ignoree.
             if self.eat_sym("(") {
                 while !self.eat_sym(")") {
@@ -250,6 +250,7 @@ impl Parser {
             Some(Tok::Int(n)) => Value::Int(if negative { -n } else { n }),
             Some(Tok::Float(f)) => Value::Float(if negative { -f } else { f }),
             Some(Tok::Str(s)) if !negative => Value::Text(s),
+            Some(Tok::Blob(b)) if !negative => Value::Blob(b),
             Some(Tok::Word { text, quoted: false }) if !negative && matches!(text.as_str(), "true" | "false" | "null") => match text.as_str() {
                 "true" => Value::Bool(true),
                 "false" => Value::Bool(false),
@@ -515,6 +516,10 @@ impl Parser {
             Tok::Str(s) => {
                 self.pos += 1;
                 Ok(Expr::Literal(Value::Text(s)))
+            }
+            Tok::Blob(b) => {
+                self.pos += 1;
+                Ok(Expr::Literal(Value::Blob(b)))
             }
             Tok::Param => {
                 self.pos += 1;

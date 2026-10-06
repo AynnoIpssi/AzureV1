@@ -34,7 +34,7 @@ pub use format_menu::{FormatItem, FormatMenu};
 pub use focus::{clear_focus, escape, focus_clicked, focus_next, key_on_focused};
 pub use keyboard::{KeyInput, KeyboardLayout, detect_keyboard_layout, key_to_input, key_to_input_with};
 pub use keymap::{Keymap, Modifiers};
-pub use pointer::{cadrer_toiles, carry_toiles, survol_toile, drag_toile, release_toile, scroll_toile, ControlClick, HoverKind, any_dragging, button_id_at, click_controls, drag_slider, hover_group_at, hover_kind_at, release_all, set_button_text, toggle_button_at, tooltip_at};
+pub use pointer::{cadrer_toiles, carry_toiles, survol_toile, drag_toile, release_toile, scroll_toile, ControlClick, HoverKind, any_dragging, button_id_at, click_controls, drag_slider, hover_group_at, hover_kind_at, release_all, set_button_text, set_field_text, toggle_button_at, tooltip_at};
 pub use scroll::{ScrollDrag, animate_scroll, carry_scroll, carry_scroll_anchored, scroll_at, scroll_to_anchor, scroll_x_at, scrollbar_drag, scrollbar_grab};
 pub use select::{TextPoint, TextSelection, apply_text_selection, clear_text_selection, nearest_text_point, select_all_text, selected_text, text_point_at, text_unit_at};
 pub use text::{FocusedArea, delete_focused_range, focused_area_info, focused_caret, focused_rich_id, rich_focused, move_vertical, apply_rich_button, line_height, any_focused, ensure_cursor_visible, extend_selection_to, focus_textarea_at, type_into_focused};

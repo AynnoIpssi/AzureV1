@@ -183,6 +183,9 @@ impl AzureApp {
                 }
             }
         }
+        // Les dossiers autorises : les « lieux » de la boite « Ouvrir ».
+        let permissions = &app.manifest.permissions;
+        crate::selecteur::definir_lieux(permissions.write.iter().chain(&permissions.read).cloned().collect());
         if app.sockets.sandbox {
             app.enclose()?;
         }
@@ -316,6 +319,22 @@ impl AzureApp {
             builder = builder.event(event);
         }
         Ok(builder)
+    }
+
+    /// Sert toutes les methodes d'un service de la librairie
+    /// (`azure_libraire::service`), sous leur nom complet
+    /// `<service>-<methode>` ; chacune doit etre declaree `[provide ...]`
+    /// dans le manifeste (`azure_libraire::service::manifeste` ecrit ces
+    /// sections). Servies tant que les `Server` retournes existent.
+    pub fn servir(&self, service: &'static azure_libraire::service::Service) -> Result<Vec<Server>, String> {
+        service
+            .methodes
+            .iter()
+            .map(|m| {
+                let appeler = m.appeler;
+                self.serve(&service.nom_complet(m), move |req| appeler(&azure_libraire::service::Valeur::from(&req.args)).map(Value::from))
+            })
+            .collect()
     }
 
     /// Sert la methode `method`, declaree par `[provide method]` dans le

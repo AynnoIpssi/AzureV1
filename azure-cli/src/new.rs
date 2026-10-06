@@ -75,7 +75,7 @@ pub fn set_apps_dir(paths: &Paths, dir: &Path) -> Result<PathBuf, String> {
 /// (hors du workspace d'Azure, ceux du workspace ne s'appliquent plus) : le
 /// rendu pixel par pixel est ~10x plus lent sans optimisation, meme en
 /// `cargo run`.
-pub const OPT_PROFILES: &str = "\n# Le moteur d'Azure est optimise meme en `cargo run` (rendu ~10x plus\n# lent sinon) ; le code de l'app reste compile normalement.\n[profile.dev.package.azure-engine]\nopt-level = 3\n\n[profile.dev.package.azure-foundation]\nopt-level = 3\n\n[profile.dev.package.ttf-parser]\nopt-level = 3\n\n[profile.dev.package.azure-stockage]\nopt-level = 3\n\n[profile.dev.package.azure-core]\nopt-level = 3\n";
+pub const OPT_PROFILES: &str = "\n# Le moteur d'Azure est optimise meme en `cargo run` (rendu ~10x plus\n# lent sinon) ; le code de l'app reste compile normalement.\n[profile.dev.package.azure-engine]\nopt-level = 3\n\n[profile.dev.package.azure-foundation]\nopt-level = 3\n\n[profile.dev.package.ttf-parser]\nopt-level = 3\n\n[profile.dev.package.azure-stockage]\nopt-level = 3\n\n[profile.dev.package.azure-core]\nopt-level = 3\n\n[profile.dev.package.azure-libraire]\nopt-level = 3\n";
 
 /// `.cargo/config.toml` d'une app : compilation dans le dossier partage.
 pub fn cargo_config(paths: &Paths) -> String {

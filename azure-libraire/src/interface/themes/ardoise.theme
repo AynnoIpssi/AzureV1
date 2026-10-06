@@ -1,0 +1,58 @@
+# Ardoise : sombre et neutre, accent sauge, angles plus nets.
+nom = ardoise
+titre = Ardoise
+sombre = true
+
+fond = #111314
+fond-creux = #0a0b0c
+fond-barre = #0d0f10
+surface = #151819
+surface-2 = #181b1d
+surface-3 = #1d2022
+surface-4 = #212527
+surface-5 = #2a2e31
+surface-6 = #32373a
+
+texte-fort = #f1f3f2
+texte = #e3e6e5
+texte-doux = #cfd4d2
+texte-attenue = #b0b7b4
+texte-discret = #838b88
+texte-faible = #69706d
+texte-eteint = #474d4b
+
+accent = #8fbf9f
+accent-vif = #a3cfb1
+accent-sombre = #5f8f70
+accent-ombre = #3f5c49
+accent-nuit = #2c4234
+accent-texte = #c4e0cd
+accent-texte-vif = #d6ecdd
+sur-accent = #101512
+sur-couleur = #ffffff
+
+trait = #ffffff
+ombre = #000000
+voile = #070808
+
+succes = #4ade80
+succes-texte = #6ee7a0
+attention = #fbbf24
+attention-texte = #fcd34d
+danger = #f87171
+danger-texte = #fca5a5
+code-texte = #c3e88d
+
+# Graphes : la premiere serie prend l'accent, les suivantes ces couleurs.
+graphe-2 = #d9b36a
+graphe-3 = #d98a6a
+graphe-4 = #b79fd6
+graphe-5 = #7fb8c9
+graphe-6 = #a8adb0
+
+rayon-petit = 4px
+rayon = 6px
+rayon-moyen = 8px
+rayon-grand = 10px
+rayon-large = 12px
+rayon-rond = 999px

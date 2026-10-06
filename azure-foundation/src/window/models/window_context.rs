@@ -47,6 +47,9 @@ pub struct WindowContext<'a> {
     /// Demande un jeton d'activation au compositeur (voir
     /// `activation_token`) ; seulement pendant un clic.
     pub activation: Option<&'a mut dyn FnMut() -> Option<String>>,
+    /// Le chemin choisi dans la boite « Ouvrir » (voir `choisir`), pendant
+    /// le rappel qui suit ce choix.
+    pub choix: Option<&'a str>,
 }
 
 /// Demandes d'un rappel, appliquees par la fenetre juste apres lui.
@@ -63,6 +66,8 @@ pub struct Effects {
     pub activate: Option<String>,
     /// Passer la fenetre en plein ecran, ou en sortir (voir `plein_ecran`).
     pub plein_ecran: Option<bool>,
+    /// Ouvrir la boite « Ouvrir » (voir `choisir`).
+    pub selecteur: Option<crate::selecteur::Selecteur>,
 }
 
 impl<'a> WindowContext<'a> {
@@ -80,6 +85,22 @@ impl<'a> WindowContext<'a> {
     /// pour une case cochee, `"42"` pour un curseur.
     pub fn value(&self, id: &str) -> Option<String> {
         self.values?.get(id).map(|v| v.as_text())
+    }
+
+    /// Ouvre la boite « Ouvrir » d'Azure par-dessus la page, pour choisir
+    /// un dossier ou un fichier au lieu de taper son chemin (voir
+    /// `crate::selecteur`) :
+    /// `ctx.choisir(Selecteur::dossier().titre("Relier un projet").dans("chemin").puis("lier"))`.
+    /// Au choix, le chemin est ecrit dans le champ `dans`, puis `on_click`
+    /// est rappele avec `ctx.clicked == puis` et le chemin dans `choix()`.
+    pub fn choisir(&mut self, demande: crate::selecteur::Selecteur) {
+        self.effects.selecteur = Some(demande);
+    }
+
+    /// Le chemin (absolu) que la personne vient de choisir dans la boite
+    /// « Ouvrir » ; `None` dans tout autre rappel.
+    pub fn choix(&self) -> Option<&'a str> {
+        self.choix
     }
 
     /// Met `text` dans le presse-papiers du systeme, comme un Ctrl+C : il

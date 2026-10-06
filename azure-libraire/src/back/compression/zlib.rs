@@ -2,7 +2,9 @@
 // format, pas DEFLATE nu, que les chunks IDAT d'un PNG contiennent (voir
 // `codec::png`). Deux octets d'en-tete, le flux DEFLATE, puis un Adler-32
 // des donnees DECOMPRESSEES pour detecter une corruption.
-use crate::codec::deflate::inflate;
+use super::compresser::deflate;
+use super::deflate::inflate;
+use crate::back::hachage::adler32::adler32;
 
 /// Decompresse un flux zlib complet : verifie l'en-tete (methode de
 /// compression = DEFLATE, pas de dictionnaire pre-partage - jamais utilise
@@ -37,16 +39,12 @@ pub fn decompress(data: &[u8]) -> Result<Vec<u8>, String> {
     Ok(decoded)
 }
 
-const ADLER_MOD: u32 = 65521;
-
-fn adler32(data: &[u8]) -> u32 {
-    let mut a: u32 = 1;
-    let mut b: u32 = 0;
-    for &byte in data {
-        a = (a + byte as u32) % ADLER_MOD;
-        b = (b + a) % ADLER_MOD;
-    }
-    (b << 16) | a
+/// Compresse `data` en un flux zlib complet (en-tete, DEFLATE, Adler-32).
+pub fn compress(data: &[u8]) -> Vec<u8> {
+    let mut out = vec![0x78, 0x9C];
+    out.extend(deflate(data));
+    out.extend(adler32(data).to_be_bytes());
+    out
 }
 
 #[cfg(test)]
@@ -54,9 +52,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn adler32_matches_the_known_reference_value_for_wikipedia() {
-        // Exemple de reference standard (page Wikipedia "Adler-32").
-        assert_eq!(adler32(b"Wikipedia"), 0x11E60398);
+    fn compress_then_decompress_gives_the_data_back() {
+        for data in [&b""[..], b"a", b"abcabcabcabcabcabc", &[7u8; 5000]] {
+            assert_eq!(decompress(&compress(data)).unwrap(), data);
+        }
     }
 
     #[test]

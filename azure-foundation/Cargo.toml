@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 azure-core = { path = "../azure-core" }
 azure-engine = { path = "../azure-engine" }
+azure-libraire = { path = "../azure-libraire" }
 azure-rooter = { path = "../azure-rooter" }
 azure-stockage = { path = "../azure-stockage" }
 azure-provider = { path = "../azure-provider" }

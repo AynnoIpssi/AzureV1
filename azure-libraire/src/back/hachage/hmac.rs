@@ -1,5 +1,5 @@
 // HMAC-SHA256 (RFC 2104) et PBKDF2-HMAC-SHA256 (RFC 8018), ecrits a la main.
-use crate::crypto::sha256::{sha256, Sha256};
+use super::sha256::{sha256, Sha256};
 
 pub fn hmac_sha256(key: &[u8], message: &[u8]) -> [u8; 32] {
     let mut block = [0u8; 64];

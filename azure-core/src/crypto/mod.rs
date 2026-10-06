@@ -1,9 +1,5 @@
-// Crypto ecrite a la main (aucune dependance), partagee par les daemons
-// d'Azure. Chaque algorithme est verifie par les vecteurs officiels de sa
-// norme (azure-stockage/tests/crypto_vectors.rs). Non auditee.
-pub mod aead;
-pub mod chacha20;
-pub mod hmac;
-pub mod poly1305;
-pub mod random;
-pub mod sha256;
+// La crypto partagee par les daemons d'Azure. Elle vit dans la librairie
+// (azure-libraire, `back::hachage` et `back::chiffrement`) ; ce module
+// garde les chemins `azure_core::crypto::...` d'avant.
+pub use azure_libraire::back::chiffrement::{aead, chacha20, poly1305, random};
+pub use azure_libraire::back::hachage::{hmac, sha256};

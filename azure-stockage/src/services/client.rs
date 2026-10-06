@@ -4,9 +4,30 @@ use crate::managers::stockage::{Credentials, SharedInfo};
 use crate::models::request::*;
 use crate::models::wire::{Reader, Writer};
 use crate::rss::engine::{Login, RssResult};
-use crate::rss::value::Value;
+use crate::rss::ast::ColumnDef;
+use crate::rss::table::IndexDef;
+use crate::rss::value::{DataType, Value};
 use azure_core::models::storage_model::{Role, ShareAccess};
 use std::os::unix::net::UnixStream;
+
+/// Une app vue par l'admin des donnees.
+#[derive(Debug, Clone, PartialEq)]
+pub struct AdminApp {
+    pub id: u32,
+    pub name: String,
+    pub tables: u32,
+    pub keys: u32,
+}
+
+/// Une table vue par l'admin des donnees.
+#[derive(Debug, Clone, PartialEq)]
+pub struct AdminTable {
+    pub name: String,
+    pub share: Option<ShareAccess>,
+    pub rows: u64,
+    pub columns: Vec<ColumnDef>,
+    pub indexes: Vec<IndexDef>,
+}
 
 pub struct StockageClient {
     stream: UnixStream,
@@ -85,7 +106,11 @@ impl StockageClient {
     /// Execute du RsS (une ou plusieurs instructions) : un resultat par
     /// instruction. `logins` : comptes pour les tables protegees des autres apps.
     pub fn rss(&mut self, sql: &str, params: &[Value], logins: &[Login]) -> Result<Vec<RssResult>, String> {
-        let mut request = params.iter().fold(Writer::new().u32(RSS).str(sql).u32(params.len() as u32), |w, v| v.write(w));
+        self.rss_request(Writer::new().u32(RSS), sql, params, logins)
+    }
+
+    fn rss_request(&mut self, request: Writer, sql: &str, params: &[Value], logins: &[Login]) -> Result<Vec<RssResult>, String> {
+        let mut request = params.iter().fold(request.str(sql).u32(params.len() as u32), |w, v| v.write(w));
         request = logins.iter().fold(request.u32(logins.len() as u32), |w, l| w.u32(l.owner).str(&l.user).str(&l.password));
         self.call(request, |r| {
             (0..r.u32()?)
@@ -98,6 +123,53 @@ impl StockageClient {
                 })
                 .collect()
         })
+    }
+
+    // ---- Admin des donnees (Azure Data ; refuse aux autres apps) ----
+
+    /// Les apps qui ont un espace de stockage.
+    pub fn admin_apps(&mut self) -> Result<Vec<AdminApp>, String> {
+        self.call(Writer::new().u32(ADMIN_APPS), |r| (0..r.u32()?).map(|_| Ok(AdminApp { id: r.u32()?, name: r.str()?, tables: r.u32()?, keys: r.u32()? })).collect())
+    }
+
+    /// Du RsS au nom de l'app `owner` : ses tables privees, comme elle.
+    pub fn admin_rss(&mut self, owner: u32, sql: &str, params: &[Value]) -> Result<Vec<RssResult>, String> {
+        self.rss_request(Writer::new().u32(ADMIN_RSS).u32(owner), sql, params, &[])
+    }
+
+    /// Les tables de l'app `owner`.
+    pub fn admin_schema(&mut self, owner: u32) -> Result<Vec<AdminTable>, String> {
+        self.call(Writer::new().u32(ADMIN_SCHEMA).u32(owner), |r| {
+            (0..r.u32()?)
+                .map(|_| {
+                    let name = r.str()?;
+                    let share = match r.u32()? {
+                        0 => None,
+                        code => Some(ShareAccess::from_code(code - 1).ok_or("Acces inconnu")?),
+                    };
+                    let rows = r.u64()?;
+                    let mut columns = Vec::new();
+                    for _ in 0..r.u32()? {
+                        let col_name = r.str()?;
+                        let ty = DataType::from_code(r.u8()?).ok_or("Type de colonne inconnu")?;
+                        let flags = r.u8()?;
+                        let default = if r.u8()? == 1 { Some(Value::read(r)?) } else { None };
+                        columns.push(ColumnDef { name: col_name, ty, primary: flags & 1 != 0, unique: flags & 2 != 0, not_null: flags & 4 != 0, default });
+                    }
+                    let indexes = (0..r.u32()?).map(|_| Ok(IndexDef { name: r.str()?, column: r.str()?, unique: r.u8()? != 0 })).collect::<Result<Vec<_>, String>>()?;
+                    Ok(AdminTable { name, share, rows, columns, indexes })
+                })
+                .collect()
+        })
+    }
+
+    /// Les cles privees de l'app `owner` et la taille de leur valeur.
+    pub fn admin_keys(&mut self, owner: u32) -> Result<Vec<(String, u64)>, String> {
+        self.call(Writer::new().u32(ADMIN_KEYS).u32(owner), |r| (0..r.u32()?).map(|_| Ok((r.str()?, r.u64()?))).collect())
+    }
+
+    pub fn admin_get(&mut self, owner: u32, key: &str) -> Result<Option<Vec<u8>>, String> {
+        self.call(Writer::new().u32(ADMIN_GET).u32(owner).str(key), |r| Ok(if r.u8()? == 1 { Some(r.bytes()?.to_vec()) } else { None }))
     }
 
     // ---- Comptes ----

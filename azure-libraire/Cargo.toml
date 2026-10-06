@@ -1,0 +1,9 @@
+[package]
+name = "azure-libraire"
+version = "0.1.0"
+edition = "2024"
+
+# La librairie des modules d'Azure. Aucune dependance : ce sont des
+# sources (rsH, rsC, themes) et de quoi les lister ; azure-foundation les
+# charge (voir azure-foundation/src/compiler/components).
+[dependencies]

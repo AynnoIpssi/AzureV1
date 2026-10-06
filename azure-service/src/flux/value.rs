@@ -231,3 +231,35 @@ impl<T: Into<Value>> From<Option<T>> for Value {
         value.map(Into::into).unwrap_or(Value::Null)
     }
 }
+
+// Les valeurs des services de la librairie (azure-libraire, `service`) :
+// la meme forme, dans les deux sens.
+impl From<azure_libraire::service::Valeur> for Value {
+    fn from(v: azure_libraire::service::Valeur) -> Value {
+        use azure_libraire::service::Valeur;
+        match v {
+            Valeur::Rien => Value::Null,
+            Valeur::Booleen(b) => Value::Bool(b),
+            Valeur::Entier(n) => Value::Int(n),
+            Valeur::Decimal(f) => Value::Float(f),
+            Valeur::Texte(t) => Value::Text(t),
+            Valeur::Liste(l) => Value::List(l.into_iter().map(Value::from).collect()),
+            Valeur::Table(t) => Value::Map(t.into_iter().map(|(k, v)| (k, Value::from(v))).collect()),
+        }
+    }
+}
+
+impl From<&Value> for azure_libraire::service::Valeur {
+    fn from(v: &Value) -> azure_libraire::service::Valeur {
+        use azure_libraire::service::Valeur;
+        match v {
+            Value::Null => Valeur::Rien,
+            Value::Bool(b) => Valeur::Booleen(*b),
+            Value::Int(n) => Valeur::Entier(*n),
+            Value::Float(f) => Valeur::Decimal(*f),
+            Value::Text(t) => Valeur::Texte(t.clone()),
+            Value::List(l) => Valeur::Liste(l.iter().map(Valeur::from).collect()),
+            Value::Map(t) => Valeur::Table(t.iter().map(|(k, v)| (k.clone(), Valeur::from(v))).collect()),
+        }
+    }
+}

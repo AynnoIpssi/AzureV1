@@ -41,6 +41,15 @@ Toutes les apps tournent sous le même utilisateur Unix : le système ne les sé
 - **Ids écrits à la main (< 1000) :** premier exécutable arrivé.
 - **Routeur :** une connexion n'agit qu'au nom de l'app sous laquelle elle s'est enregistrée (abonnement, suivi, désinscription, fenêtres). Un message de plus de 16 Mo coupe la connexion. Un destinataire qui ne lit plus est abandonné après 2 s, et ses messages vont dans sa boîte aux lettres. Le contenu des messages n'est plus écrit dans les journaux.
 
+## 2 bis. L'admin des données (Azure Data)
+L'espace privé d'une app n'est lisible que par elle, à une exception voulue : **Azure Data**, l'outil qui montre et modifie les données de toutes les apps.
+- **Qui :** l'app installée sous le nom réservé `data` (`azure_stockage::managers::daemon::ADMIN_APP`). Le daemon de stockage ne la reconnaît que si azure-manager la dit **installée** (`azure install`, donc par l'utilisateur) et que son empreinte correspond. Une app de développement qui se nomme `data` n'est pas admin.
+- **Quoi :** les requêtes `ADMIN_*` du daemon (lister les apps, leur schéma, exécuter du RsS au nom d'une app, lire ses clés privées). Toute autre app reçoit « Reserve a Azure Data ».
+- **Essais et développement :** `stockage_daemon --admin <exécutable>` ou `AZURE_STOCKAGE_ADMIN=a:b` désignent d'autres exécutables admin. Rien de tel n'est posé par l'installation.
+- **Conséquence :** qui peut installer une app nommée `data` peut tout lire ; c'est l'utilisateur lui-même (`azure install` est réservé aux outils d'Azure). Azure Data garde aussi les mots de passe de ses connexions externes dans son espace chiffré.
+- **Prévu plus tard (choix de Yoann, 2026-10-06) :** remplacer cet accès global par des identifiants que chaque app donne.
+- **Bases externes :** les clients MySQL et PostgreSQL d'Azure Data ne chiffrent pas la connexion (pas de TLS). Le mot de passe ne circule jamais en clair (défi-réponse, ou RSA pour `caching_sha2_password`), mais les données si : à garder pour un réseau de confiance.
+
 ## 3. Daemons durcis
 - **Sockets dans un dossier privé :** `$XDG_RUNTIME_DIR/azure/` (sinon `/tmp/azure-<uid>/`, ou `$AZURE_RUNTIME_DIR`). Chaque daemon le crée en 700 et refuse de démarrer s'il appartient à un autre compte ou si d'autres peuvent y écrire : un autre compte ne peut pas se faire passer pour un daemon. Une app enfermée ne peut pas y écrire.
 - **Plafond de connexions :** 64 connexions simultanées par processus client et 1024 en tout, par daemon (au-delà, la connexion est fermée aussitôt).

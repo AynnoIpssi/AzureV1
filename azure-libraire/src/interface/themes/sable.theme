@@ -1,0 +1,64 @@
+# Sable : le theme d'Azure. Gris chauds sombres, accent sable.
+nom = sable
+titre = Sable
+sombre = true
+
+# Fonds, du plus enfonce au plus releve. `fond` est celui de la page.
+fond = #121212
+fond-creux = #0c0c0b
+fond-barre = #0f0e0d
+surface = #141312
+surface-2 = #171615
+surface-3 = #1c1b19
+surface-4 = #1f1e1b
+surface-5 = #282622
+surface-6 = #2e2b27
+
+# Textes, du plus lisible au plus efface.
+texte-fort = #f3f1ed
+texte = #e7e5e1
+texte-doux = #d6d3cc
+texte-attenue = #b8b5ae
+texte-discret = #8a877f
+texte-faible = #6f6c66
+texte-eteint = #4d4a45
+
+# Accent : la couleur de l'app. `sur-accent` est le texte pose dessus.
+accent = #c9a878
+accent-vif = #d8b98a
+accent-sombre = #9c7b55
+accent-ombre = #6e5a44
+accent-nuit = #4a3d30
+accent-texte = #e0cfb3
+accent-texte-vif = #ecdcc0
+sur-accent = #1a1712
+sur-couleur = #ffffff
+
+# Traits et voiles : toujours utilises avec une opacite ($trait/8).
+trait = #ffffff
+ombre = #000000
+voile = #080807
+
+# Etats : la couleur pleine, et sa version lisible en texte.
+succes = #4ade80
+succes-texte = #6ee7a0
+attention = #fbbf24
+attention-texte = #fcd34d
+danger = #f87171
+danger-texte = #fca5a5
+code-texte = #c3e88d
+
+# Graphes : la premiere serie prend l'accent, les suivantes ces couleurs.
+graphe-2 = #7fb69a
+graphe-3 = #d98a6a
+graphe-4 = #b79fd6
+graphe-5 = #e2c36b
+graphe-6 = #8fa3ad
+
+# Arrondis.
+rayon-petit = 6px
+rayon = 8px
+rayon-moyen = 10px
+rayon-grand = 12px
+rayon-large = 16px
+rayon-rond = 999px

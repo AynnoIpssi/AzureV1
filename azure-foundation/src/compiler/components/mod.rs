@@ -8,8 +8,8 @@
 // - `<richtext#id valeur="...">` : zone de texte riche (WYSIWYG), avec sa
 //   barre d'outils `<richbar pour="id">` (composant rsH).
 // - `<include src="parts/menu.rsh"/>` : insere un autre fichier rsH.
-// - Les **composants ecrits en rsH** : ceux d'Azure (`builtin/`, carte,
-//   badge, alerte, onglets, tableau...) et ceux de l'app (dossier
+// - Les **composants ecrits en rsH** : les modules d'Azure (crate
+//   azure-libraire, dossier `interface` : carte, badge, alerte, onglets...) et ceux de l'app (dossier
 //   `components/` a cote de la page : `components/fiche.rsh` = `<fiche>`).
 //   Un composant recoit ses attributs comme variables (`{{titre}}`, et
 //   `{{titre_list}}` decoupe aux virgules), `{{class}}`, `{{id}}`,
@@ -26,6 +26,7 @@ use crate::ui::models::control::{Control, ControlKind, DEFAULT_ACCENT, DEFAULT_T
 use crate::ui::models::textarea::TextArea;
 use crate::ui::models::ui_node::UiNode;
 use azure_engine::rendering::models::color::Color;
+use azure_libraire::interface::theme;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
@@ -33,73 +34,19 @@ use std::sync::{Arc, Mutex, OnceLock};
 /// Profondeur maximale de composants imbriques.
 const MAX_DEPTH: u32 = 24;
 
-/// Les composants d'Azure : (nom, source rsH).
-pub const BUILTIN: &[(&str, &str)] = &[
-    ("row", include_str!("builtin/row.rsh")),
-    ("column", include_str!("builtin/column.rsh")),
-    ("stack", include_str!("builtin/stack.rsh")),
-    ("grid", include_str!("builtin/grid.rsh")),
-    ("center", include_str!("builtin/center.rsh")),
-    ("spacer", include_str!("builtin/spacer.rsh")),
-    ("divider", include_str!("builtin/divider.rsh")),
-    ("section", include_str!("builtin/section.rsh")),
-    ("page", include_str!("builtin/page.rsh")),
-    ("navbar", include_str!("builtin/navbar.rsh")),
-    ("footer", include_str!("builtin/footer.rsh")),
-    ("card", include_str!("builtin/card.rsh")),
-    ("badge", include_str!("builtin/badge.rsh")),
-    ("tag", include_str!("builtin/tag.rsh")),
-    ("chip", include_str!("builtin/chip.rsh")),
-    ("avatar", include_str!("builtin/avatar.rsh")),
-    ("alert", include_str!("builtin/alert.rsh")),
-    ("kbd", include_str!("builtin/kbd.rsh")),
-    ("code", include_str!("builtin/code.rsh")),
-    ("quote", include_str!("builtin/quote.rsh")),
-    ("stat", include_str!("builtin/stat.rsh")),
-    ("empty", include_str!("builtin/empty.rsh")),
-    ("skeleton", include_str!("builtin/skeleton.rsh")),
-    ("btn", include_str!("builtin/btn.rsh")),
-    ("link", include_str!("builtin/link.rsh")),
-    ("ancre", include_str!("builtin/ancre.rsh")),
-    ("list", include_str!("builtin/list.rsh")),
-    ("list-item", include_str!("builtin/list-item.rsh")),
-    ("menu", include_str!("builtin/menu.rsh")),
-    ("menu-item", include_str!("builtin/menu-item.rsh")),
-    ("tabs", include_str!("builtin/tabs.rsh")),
-    ("breadcrumb", include_str!("builtin/breadcrumb.rsh")),
-    ("steps", include_str!("builtin/steps.rsh")),
-    ("pagination", include_str!("builtin/pagination.rsh")),
-    ("timeline", include_str!("builtin/timeline.rsh")),
-    ("timeline-item", include_str!("builtin/timeline-item.rsh")),
-    ("accordion", include_str!("builtin/accordion.rsh")),
-    ("table", include_str!("builtin/table.rsh")),
-    ("tr", include_str!("builtin/tr.rsh")),
-    ("th", include_str!("builtin/th.rsh")),
-    ("td", include_str!("builtin/td.rsh")),
-    ("form", include_str!("builtin/form.rsh")),
-    ("field", include_str!("builtin/field.rsh")),
-    ("info", include_str!("builtin/info.rsh")),
-    ("meter", include_str!("builtin/meter.rsh")),
-    ("toast", include_str!("builtin/toast.rsh")),
-    ("hero", include_str!("builtin/hero.rsh")),
-    ("feature", include_str!("builtin/feature.rsh")),
-    ("price", include_str!("builtin/price.rsh")),
-    ("modal", include_str!("builtin/modal.rsh")),
-    ("drawer", include_str!("builtin/drawer.rsh")),
-    ("toasts", include_str!("builtin/toasts.rsh")),
-    ("banner", include_str!("builtin/banner.rsh")),
-    ("richbar", include_str!("builtin/richbar.rsh")),
-];
-
-/// Les regles rsC des composants d'Azure, placees AVANT celles de l'app :
-/// une regle de l'app sur le meme selecteur l'emporte toujours.
-pub const DEFAULT_STYLES: &str = include_str!("builtin/components.rsc");
+/// Les regles rsC des modules d'Azure (azure-libraire), aux couleurs du
+/// theme en cours.
+pub fn default_styles() -> String {
+    theme::actif().appliquer(azure_libraire::interface::styles())
+}
 
 /// Ajoute les styles des composants (Azure, puis ceux de l'app) devant la
-/// feuille rsC `rsc` de la page.
+/// feuille rsC `rsc` de la page : une regle de l'app sur le meme selecteur
+/// l'emporte toujours. Les jetons du theme (`$accent`, `$surface`...) sont
+/// remplaces partout, feuille de l'app comprise.
 pub fn with_default_styles(rsc: &str, library: Option<&Library>) -> String {
     let user = library.map(Library::styles).unwrap_or_default();
-    format!("{DEFAULT_STYLES}\n{user}\n{rsc}")
+    theme::actif().appliquer(&format!("{}\n{user}\n{rsc}", azure_libraire::interface::styles()))
 }
 
 /// Le contenu passe a un composant (voir `<slot/>`), avec le contexte de la
@@ -125,9 +72,9 @@ pub struct Library {
 fn builtin_templates() -> &'static HashMap<&'static str, Arc<Vec<AstNode>>> {
     static TEMPLATES: OnceLock<HashMap<&'static str, Arc<Vec<AstNode>>>> = OnceLock::new();
     TEMPLATES.get_or_init(|| {
-        BUILTIN
+        azure_libraire::interface::modules()
             .iter()
-            .map(|(name, source)| (*name, Arc::new(parse(tokenize(source)).unwrap_or_else(|e| panic!("composant integre <{name}> invalide : {e}")))))
+            .map(|m| (m.nom, Arc::new(parse(tokenize(m.rsh)).unwrap_or_else(|e| panic!("module <{}> invalide : {e}", m.nom)))))
             .collect()
     })
 }
@@ -383,11 +330,12 @@ fn build_control(kind: ControlKind, tag: &str, class: &str, id: &str, attrs: &[(
     // boite.
     control.decoration.fill = None;
     control.decoration.hover_fill = None;
-    control.id = id.to_string();
+    control.id = interpolate(id, ctx);
     control.track = style.background.unwrap_or(DEFAULT_TRACK);
     control.text_color = style.color.unwrap_or(DEFAULT_TEXT);
     control.font_size = style.font_size.unwrap_or(14.0);
-    control.accent = accent(tag, class, id, source, ancestors, preceding).unwrap_or(DEFAULT_ACCENT);
+    // Sans `accent-color` : l'accent du theme.
+    control.accent = accent(tag, class, id, source, ancestors, preceding).or_else(|| theme::actif().couleur("accent").map(|(r, g, b)| Color::new(r, g, b, 255))).unwrap_or(DEFAULT_ACCENT);
     control.disabled = truthy(attr(attrs, "disabled", ctx));
 
     // Options : enfants `<option value="fr">France<!option>`, ou
@@ -447,6 +395,32 @@ fn build_control(kind: ControlKind, tag: &str, class: &str, id: &str, attrs: &[(
             t.a_cadrer = !t.vue.is_empty();
             control.toile = Some(Box::new(t));
         }
+        // `type`, `valeurs` ou `series`, `etiquettes`... voir `ui::models::graphe`.
+        ControlKind::Graphe => {
+            use crate::ui::models::graphe::{Genre, Graphe};
+            let mut g = Graphe::new(Genre::lire(&attr(attrs, "type", ctx).unwrap_or_default()));
+            g.series = Graphe::lire_series(&attr(attrs, "series", ctx).filter(|s| !s.trim().is_empty()).or_else(|| attr(attrs, "valeurs", ctx)).unwrap_or_default());
+            // Une etiquette vide garde sa place : `"0 s, , , 3 s"`.
+            g.etiquettes = attr(attrs, "etiquettes", ctx).filter(|e| !e.trim().is_empty()).map(|e| e.split(',').map(|s| s.trim().to_string()).collect()).unwrap_or_default();
+            g.min = number(attr(attrs, "min", ctx));
+            g.max = number(attr(attrs, "max", ctx));
+            g.unite = attr(attrs, "unite", ctx).unwrap_or_default();
+            g.centre = attr(attrs, "centre", ctx).unwrap_or_default();
+            g.legende = truthy(attr(attrs, "legende", ctx).filter(|v| !v.is_empty()));
+            let sauf_non = |nom: &str| !matches!(attr(attrs, nom, ctx).as_deref().map(str::trim), Some("false" | "non" | "0"));
+            g.grille = sauf_non("grille");
+            g.lisse = sauf_non("lisse");
+            // Les couleurs : celles demandees, sinon l'accent puis la palette du theme.
+            let theme = theme::actif();
+            g.couleurs = attr(attrs, "couleurs", ctx).map(|l| l.split(',').filter_map(|c| theme::rvb(c.trim())).map(|(r, v, b)| Color::new(r, v, b, 255)).collect()).unwrap_or_default();
+            if g.couleurs.is_empty() {
+                g.couleurs = std::iter::once(control.accent).chain((2..=6).filter_map(|i| theme.couleur(&format!("graphe-{i}"))).map(|(r, v, b)| Color::new(r, v, b, 255))).collect();
+            }
+            if let Some((r, v, b)) = theme.couleur("texte-fort") {
+                g.fort = Color::new(r, v, b, 255);
+            }
+            control.graphe = Some(Box::new(g));
+        }
         _ => {}
     }
     out.push(UiNode::Control(control));
@@ -460,7 +434,7 @@ fn build_input(tag: &str, class: &str, id: &str, attrs: &[(String, String)], chi
     let initial = attr(attrs, "value", ctx).unwrap_or_else(|| interpolate(extract_text(children).trim(), ctx));
     let mut area = TextArea::new(layout_for(&style, source), color_of(style.background), color_of(style.color), initial);
     area.single_line = true;
-    area.id = id.to_string();
+    area.id = interpolate(id, ctx);
     area.placeholder = attr(attrs, "placeholder", ctx).unwrap_or_default();
     area.password = kind == "password";
     area.numeric = kind == "number";

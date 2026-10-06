@@ -45,6 +45,7 @@ pub fn natural_width(control: &Control) -> f32 {
         ControlKind::Segmented => control.options.iter().map(|(_, l)| text_width(l, control.font_size) + 2.0 * SEGMENT_PAD).sum::<f32>() + 4.0,
         ControlKind::Rating => rating_count(control) as f32 * (DOT + DOT_GAP) - DOT_GAP + label,
         ControlKind::Toile => 480.0,
+        ControlKind::Graphe => 320.0,
     }
 }
 
@@ -57,6 +58,7 @@ pub fn natural_height(control: &Control) -> f32 {
         ControlKind::Select => SELECT_H,
         ControlKind::Segmented => 32.0,
         ControlKind::Toile => 320.0,
+        ControlKind::Graphe => 160.0,
     }
 }
 
@@ -148,9 +150,13 @@ pub fn draw_control(control: &Control, own_box: Rect, canvas: &mut Canvas, mouse
         crate::ui::services::draw_toile::draw_toile(toile, own_box, canvas);
         return;
     }
+    if let (ControlKind::Graphe, Some(graphe)) = (control.kind, control.graphe.as_deref()) {
+        crate::ui::services::draw_graphe::draw_graphe(graphe, control, own_box, canvas);
+        return;
+    }
     match control.kind {
-        // Dessinee plus haut (sans dessin : rien).
-        ControlKind::Toile => {}
+        // Dessines plus haut (sans dessin : rien).
+        ControlKind::Toile | ControlKind::Graphe => {}
         ControlKind::Checkbox => {
             let (bx, by) = (x, cy - BOX / 2.0);
             if control.checked {

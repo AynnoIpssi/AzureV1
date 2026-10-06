@@ -1,0 +1,58 @@
+# Ivoire : le theme clair. Papier chaud, accent bronze.
+nom = ivoire
+titre = Ivoire
+sombre = false
+
+fond = #f6f3ee
+fond-creux = #ece7df
+fond-barre = #efeae2
+surface = #ffffff
+surface-2 = #faf8f4
+surface-3 = #f3efe8
+surface-4 = #ece7df
+surface-5 = #e3ddd3
+surface-6 = #d8d1c5
+
+texte-fort = #1c1a17
+texte = #2b2824
+texte-doux = #45413b
+texte-attenue = #5f5a52
+texte-discret = #7d776d
+texte-faible = #9a948a
+texte-eteint = #bdb7ad
+
+accent = #a67c45
+accent-vif = #b88d55
+accent-sombre = #86622f
+accent-ombre = #a67c45
+accent-nuit = #86622f
+accent-texte = #86622f
+accent-texte-vif = #6d4e22
+sur-accent = #ffffff
+sur-couleur = #ffffff
+
+trait = #1c1a17
+ombre = #4a3f33
+voile = #2b2824
+
+succes = #16a34a
+succes-texte = #15803d
+attention = #d97706
+attention-texte = #b45309
+danger = #dc2626
+danger-texte = #b91c1c
+code-texte = #4d7c0f
+
+# Graphes : la premiere serie prend l'accent, les suivantes ces couleurs.
+graphe-2 = #3f8f6b
+graphe-3 = #c2603f
+graphe-4 = #7d62b0
+graphe-5 = #b8901f
+graphe-6 = #5b7682
+
+rayon-petit = 6px
+rayon = 8px
+rayon-moyen = 10px
+rayon-grand = 12px
+rayon-large = 16px
+rayon-rond = 999px

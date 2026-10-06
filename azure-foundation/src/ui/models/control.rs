@@ -20,6 +20,8 @@ pub enum ControlKind {
     Rating,
     /// Surface de dessin facon draw.io (voir `ui::models::toile`).
     Toile,
+    /// Graphe (courbe, barres, anneau... voir `ui::models::graphe`).
+    Graphe,
 }
 
 impl ControlKind {
@@ -34,13 +36,14 @@ impl ControlKind {
             "segmented" => ControlKind::Segmented,
             "rating" | "stars" => ControlKind::Rating,
             "toile" | "canvas" => ControlKind::Toile,
+            "graphe" | "graph" => ControlKind::Graphe,
             _ => return None,
         })
     }
 
-    /// Reagit au clic (tous sauf la barre de progression).
+    /// Reagit au clic (tous sauf la barre de progression et le graphe).
     pub fn interactive(self) -> bool {
-        self != ControlKind::Progress
+        !matches!(self, ControlKind::Progress | ControlKind::Graphe)
     }
 }
 
@@ -84,6 +87,8 @@ pub struct Control {
     pub font_size: f32,
     /// Le dessin et la vue d'une toile (`ControlKind::Toile`).
     pub toile: Option<Box<crate::ui::models::toile::Toile>>,
+    /// Ce que montre un graphe (`ControlKind::Graphe`).
+    pub graphe: Option<Box<crate::ui::models::graphe::Graphe>>,
 }
 
 pub const DEFAULT_ACCENT: Color = Color::new(201, 168, 120, 255);
@@ -117,6 +122,7 @@ impl Control {
             text_color: DEFAULT_TEXT,
             font_size: 14.0,
             toile: None,
+            graphe: None,
         }
     }
 

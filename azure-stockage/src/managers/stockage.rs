@@ -197,14 +197,7 @@ impl AzureStockage {
     pub fn bind_app(&self, app: u32, exe: &str) -> Result<(), String> {
         let path = self.root.join("apps.bin");
         let key = self.derive(b"registry");
-        let mut apps: Vec<(u32, String)> = Vec::new();
-        if let Some(data) = read_optional(&path)? {
-            let plain = open(&key, b"apps", &data)?;
-            let mut reader = Reader::new(&plain);
-            for _ in 0..reader.u32()? {
-                apps.push((reader.u32()?, reader.str()?));
-            }
-        }
+        let mut apps = self.bound_apps()?;
         match apps.iter().find(|(id, _)| *id == app) {
             Some((_, known)) if known == exe => Ok(()),
             Some((_, known)) => Err(format!("L'app {app} appartient a l'executable {known}, pas a {exe}")),
@@ -217,6 +210,19 @@ impl AzureStockage {
                 write_atomic(&path, &seal(&key, b"apps", &writer.finish())?)
             }
         }
+    }
+
+    /// Les apps qui se sont presentees sans azure-manager : (id, executable).
+    pub fn bound_apps(&self) -> Result<Vec<(u32, String)>, String> {
+        let mut apps = Vec::new();
+        if let Some(data) = read_optional(&self.root.join("apps.bin"))? {
+            let plain = open(&self.derive(b"registry"), b"apps", &data)?;
+            let mut reader = Reader::new(&plain);
+            for _ in 0..reader.u32()? {
+                apps.push((reader.u32()?, reader.str()?));
+            }
+        }
+        Ok(apps)
     }
 
     // ---- Stockage prive ----

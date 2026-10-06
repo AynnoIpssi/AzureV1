@@ -110,6 +110,25 @@ pub fn set_button_text(nodes: &mut [UiNode], id: &str, text: &str) -> Option<Str
     old
 }
 
+/// Remplace le texte du champ `#id` (`<input>`, `<textarea>`), curseur a
+/// la fin ; `false` si aucun champ ne porte cet id.
+pub fn set_field_text(nodes: &mut [UiNode], id: &str, text: &str) -> bool {
+    let mut found = false;
+    for_each_mut(nodes, &mut |node| {
+        if let UiNode::TextArea(t) = node
+            && !found
+            && t.id == id
+        {
+            t.text = text.to_string();
+            t.cursor = t.text.chars().count();
+            t.selection_anchor = None;
+            t.scroll_offset = 0;
+            found = true;
+        }
+    });
+    found
+}
+
 pub fn button_id_at(nodes: &[UiNode], x: i32, y: i32, parent: (u32, u32, u32, u32)) -> Option<String> {
     match layer_at(nodes, x, y, parent) {
         Some(path) => button_id_at_base(std::slice::from_ref(node_at(nodes, &path)), x, y, parent),
@@ -282,7 +301,7 @@ pub fn click_controls(nodes: &mut [UiNode], x: i32, y: i32, parent: (u32, u32, u
                     result.id = evenement.map(|e| format!("{}@{e}", control.id));
                 }
             }
-            ControlKind::Progress => {}
+            ControlKind::Progress | ControlKind::Graphe => {}
         }
         true
     }));

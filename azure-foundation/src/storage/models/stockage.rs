@@ -141,6 +141,12 @@ impl Stockage {
         Db::new(self)
     }
 
+    /// L'acces admin aux donnees de toutes les apps (Azure Data seulement,
+    /// voir `Admin`).
+    pub fn admin(&self) -> crate::storage::models::admin::Admin {
+        crate::storage::models::admin::Admin::new(self)
+    }
+
     // ---- Emplacement ----
 
     /// Range les donnees privees de cette app (cles et tables RsS) dans le

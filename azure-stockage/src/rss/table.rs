@@ -57,8 +57,12 @@ impl Table {
         Ok(table)
     }
 
+    /// Le rang de la colonne `name` : son nom exact, sinon la seule
+    /// colonne qui porte ce nom a la casse pres (`nom` trouve `Nom`).
     pub fn column_index(&self, name: &str) -> Result<usize, String> {
-        self.columns.iter().position(|c| c.name == name).ok_or_else(|| format!("Colonne '{name}' inconnue dans '{}'", self.name))
+        let exact = self.columns.iter().position(|c| c.name == name);
+        let mut close = self.columns.iter().enumerate().filter(|(_, c)| c.name.eq_ignore_ascii_case(name)).map(|(i, _)| i);
+        exact.or_else(|| close.next().filter(|_| close.next().is_none())).ok_or_else(|| format!("Colonne '{name}' inconnue dans '{}'", self.name))
     }
 
     fn is_unique(&self, col: usize) -> bool {
@@ -112,21 +116,37 @@ impl Table {
 
     /// Complete une ligne (DEFAULT, cle primaire INT automatique) et la
     /// convertit aux types des colonnes.
-    pub fn prepare_row(&self, mut values: Vec<Option<Value>>) -> Result<Vec<Value>, String> {
+    pub fn prepare_row(&self, values: Vec<Option<Value>>) -> Result<Vec<Value>, String> {
+        self.prepare_row_after(values, &mut None)
+    }
+
+    /// Comme `prepare_row`, pour les lignes d'une meme instruction, chacune
+    /// inseree avant de preparer la suivante : `max` garde la plus grande
+    /// cle primaire INT (lue une seule fois dans la table, puis tenue a
+    /// jour), au lieu de relire toute la table a chaque ligne - sans quoi
+    /// inserer n lignes coute n * n.
+    pub fn prepare_row_after(&self, mut values: Vec<Option<Value>>, max: &mut Option<i64>) -> Result<Vec<Value>, String> {
         let mut row = Vec::with_capacity(self.columns.len());
         for (i, col) in self.columns.iter().enumerate() {
             let value = match values[i].take() {
                 Some(v) => v,
                 None => col.default.clone().unwrap_or(Value::Null),
             };
-            let value = if value.is_null() && col.primary && col.ty == DataType::Int {
+            let auto = col.primary && col.ty == DataType::Int;
+            let value = if value.is_null() && auto {
                 // Cle primaire INT absente : la suivante apres la plus grande.
-                let max = self.rows.values().filter_map(|r| if let Value::Int(n) = r[i] { Some(n) } else { None }).max().unwrap_or(0);
-                Value::Int(max + 1)
+                let plus_grande = *max.get_or_insert_with(|| self.rows.values().filter_map(|r| if let Value::Int(n) = r[i] { Some(n) } else { None }).max().unwrap_or(0));
+                Value::Int(plus_grande + 1)
             } else {
                 value
             };
-            row.push(value.coerce(col.ty).map_err(|e| format!("'{}.{}' : {e}", self.name, col.name))?);
+            let value = value.coerce(col.ty).map_err(|e| format!("'{}.{}' : {e}", self.name, col.name))?;
+            if auto
+                && let (Some(plus_grande), Value::Int(n)) = (max.as_mut(), &value)
+            {
+                *plus_grande = (*plus_grande).max(*n);
+            }
+            row.push(value);
         }
         Ok(row)
     }

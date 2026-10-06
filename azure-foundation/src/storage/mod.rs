@@ -26,6 +26,7 @@ pub mod models;
 
 // Raccourcis : `use azure_foundation::storage::{Stockage, Role};`.
 pub use azure_core::models::storage_model::{Role, ShareAccess};
+pub use models::admin::{Admin, AdminApp, AdminTable};
 pub use models::db::{Db, FromValue, Row, Rows};
 pub use models::stockage::Stockage;
 pub use azure_stockage::rss::value::Value;

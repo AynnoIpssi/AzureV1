@@ -2,7 +2,9 @@
 
 Toute balise qui n'est pas un élément de base (`container`, `text`, `title*`, `button`, `image`, `video`, `textarea`) est un **composant**. Une balise peut se fermer elle-même : `<divider/>`. Les attributs s'écrivent `nom="valeur"` et acceptent `{{variables}}`. Les classes aussi : `<badge.{{statut}}>`.
 
-Styles : chaque composant a sa classe `az-…` (feuille par défaut : `src/compiler/components/builtin/components.rsc`). Une règle de l'app sur le même sélecteur l'emporte. Les variantes sont des classes en plus : `<btn.primary>`, `<alert.danger>`, `<badge.succes>`.
+Les composants d'Azure sont les **modules d'interface** de la crate `azure-libraire` (`src/interface/modules/`), colorés par un thème : voir `azure-libraire/INTERFACE.md` pour leur liste complète (84), les thèmes et les jetons (`$accent`, `$surface`…).
+
+Styles : chaque composant a sa classe `az-…`. Une règle de l'app sur le même sélecteur l'emporte. Les variantes sont des classes en plus : `<btn.primary>`, `<alert.danger>`, `<badge.succes>`.
 
 ## Champs (valeurs lues par l'app : `ctx.value(id)`, `ctx.checked(id)`, `ctx.number(id)`)
 
@@ -20,6 +22,7 @@ Styles : chaque composant a sa classe `az-…` (feuille par défaut : `src/compi
 | `<rating#id value="4"/>` (`stars`) | `max` (5), `label` | nombre |
 | `<select#id>` + `<option value="fr">France<!option>` (`dropdown`) | `options="a, b"`, `value` | valeur choisie |
 | `<segmented#id options="Jour, Semaine"/>` | `value` | valeur choisie |
+| `<graphe type="aire" valeurs="1, 4, 2"/>` | `series`, `etiquettes`, `min`, `max`, `unite`, `legende`… (voir `azure-libraire/INTERFACE.md`, « Graphes ») | affichage seul |
 
 Couleur des cases, curseurs et barres : `accent-color` en rsC (`slider { accent-color: #f59e0b; }`). `background-color` : piste / case. `color` : texte.
 

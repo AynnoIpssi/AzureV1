@@ -100,7 +100,7 @@ fn builtin_components_are_listed_and_styles_warn_about_mistakes() {
     // Les styles par defaut sont une feuille rsC valide, sans propriete inutile.
     use azure_foundation::compiler::rsc::mangers::parser::parse;
     use azure_foundation::compiler::rsc::services::lexer::tokenize;
-    let sheet = parse(tokenize(azure_foundation::compiler::components::DEFAULT_STYLES)).unwrap();
+    let sheet = parse(tokenize(&azure_foundation::compiler::components::default_styles())).unwrap();
     assert_eq!(azure_foundation::compiler::rsc::warnings(&sheet), Vec::<String>::new());
     let sheet = parse(tokenize(".x { colour: red; cursor: pointer; color: #fff; }")).unwrap();
     assert_eq!(azure_foundation::compiler::rsc::warnings(&sheet), ["propriete 'colour' inconnue, ignoree"]);

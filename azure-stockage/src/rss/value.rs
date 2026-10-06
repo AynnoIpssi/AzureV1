@@ -8,6 +8,10 @@ pub enum DataType {
     Float,
     Text,
     Bool,
+    /// Octets bruts (`x'CAFE'`).
+    Blob,
+    /// N'importe quelle valeur, rangee telle quelle (colonne sans type).
+    Any,
 }
 
 impl DataType {
@@ -17,6 +21,8 @@ impl DataType {
             DataType::Float => "FLOAT",
             DataType::Text => "TEXT",
             DataType::Bool => "BOOL",
+            DataType::Blob => "BLOB",
+            DataType::Any => "ANY",
         }
     }
 
@@ -26,11 +32,13 @@ impl DataType {
             DataType::Float => 1,
             DataType::Text => 2,
             DataType::Bool => 3,
+            DataType::Blob => 4,
+            DataType::Any => 5,
         }
     }
 
     pub fn from_code(code: u8) -> Option<DataType> {
-        [DataType::Int, DataType::Float, DataType::Text, DataType::Bool].into_iter().find(|t| t.code() == code)
+        [DataType::Int, DataType::Float, DataType::Text, DataType::Bool, DataType::Blob, DataType::Any].into_iter().find(|t| t.code() == code)
     }
 
     /// Le type d'un nom SQL (`INTEGER`, `VARCHAR`...), `None` si inconnu.
@@ -40,6 +48,8 @@ impl DataType {
             "float" | "real" | "double" | "decimal" | "numeric" => Some(DataType::Float),
             "text" | "varchar" | "char" | "string" => Some(DataType::Text),
             "bool" | "boolean" => Some(DataType::Bool),
+            "blob" | "bytea" | "binary" => Some(DataType::Blob),
+            "any" => Some(DataType::Any),
             _ => None,
         }
     }
@@ -52,8 +62,12 @@ pub enum Value {
     Float(f64),
     Text(String),
     Bool(bool),
+    Blob(Vec<u8>),
 }
 
+impl From<Vec<u8>> for Value {
+    fn from(v: Vec<u8>) -> Value { Value::Blob(v) }
+}
 impl From<i64> for Value {
     fn from(v: i64) -> Value { Value::Int(v) }
 }
@@ -93,6 +107,11 @@ impl std::fmt::Display for Value {
             Value::Float(v) => write!(f, "{v}"),
             Value::Text(v) => write!(f, "{v}"),
             Value::Bool(v) => write!(f, "{v}"),
+            Value::Blob(v) => {
+                write!(f, "x'")?;
+                v.iter().try_for_each(|b| write!(f, "{b:02X}"))?;
+                write!(f, "'")
+            }
         }
     }
 }
@@ -109,6 +128,7 @@ impl Value {
             Value::Float(_) => "FLOAT",
             Value::Text(_) => "TEXT",
             Value::Bool(_) => "BOOL",
+            Value::Blob(_) => "BLOB",
         }
     }
 
@@ -133,6 +153,7 @@ impl Value {
             (Value::Float(a), Value::Float(b)) => a.partial_cmp(b),
             (Value::Text(a), Value::Text(b)) => Some(a.cmp(b)),
             (Value::Bool(a), Value::Bool(b)) => Some(a.cmp(b)),
+            (Value::Blob(a), Value::Blob(b)) => Some(a.cmp(b)),
             (a, b) => return Err(format!("Impossible de comparer {} et {}", a.type_name(), b.type_name())),
         })
     }
@@ -146,6 +167,7 @@ impl Value {
                 Value::Int(_) | Value::Float(_) => 1,
                 Value::Text(_) => 2,
                 Value::Bool(_) => 3,
+                Value::Blob(_) => 4,
             }
         }
         match (self, other) {
@@ -155,6 +177,7 @@ impl Value {
             (Value::Float(a), Value::Float(b)) => a.total_cmp(b),
             (Value::Text(a), Value::Text(b)) => a.cmp(b),
             (Value::Bool(a), Value::Bool(b)) => a.cmp(b),
+            (Value::Blob(a), Value::Blob(b)) => a.cmp(b),
             (a, b) => rank(a).cmp(&rank(b)),
         }
     }
@@ -164,6 +187,8 @@ impl Value {
     pub fn coerce(self, ty: DataType) -> Result<Value, String> {
         match (self, ty) {
             (Value::Null, _) => Ok(Value::Null),
+            (v, DataType::Any) => Ok(v),
+            (v @ Value::Blob(_), DataType::Blob) => Ok(v),
             (v @ Value::Int(_), DataType::Int) => Ok(v),
             (Value::Int(n), DataType::Float) => Ok(Value::Float(n as f64)),
             (v @ Value::Float(_), DataType::Float) => Ok(v),
@@ -181,6 +206,7 @@ impl Value {
             Value::Float(v) => w.u8(2).u64(v.to_bits()),
             Value::Text(v) => w.u8(3).str(v),
             Value::Bool(v) => w.u8(4).u8(*v as u8),
+            Value::Blob(v) => w.u8(5).bytes(v),
         }
     }
 
@@ -191,6 +217,7 @@ impl Value {
             2 => Value::Float(f64::from_bits(r.u64()?)),
             3 => Value::Text(r.str()?),
             4 => Value::Bool(r.u8()? != 0),
+            5 => Value::Blob(r.bytes()?.to_vec()),
             tag => return Err(format!("Valeur RsS inconnue ({tag})")),
         })
     }

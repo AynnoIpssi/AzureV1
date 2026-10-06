@@ -7,3 +7,5 @@ edition = "2024"
 azure-core = { path = "../azure-core" }
 azure-provider = { path = "../azure-provider" }
 libc = "0.2"
+# `Valeur` : les valeurs des services de la librairie, converties ici.
+azure-libraire = { path = "../azure-libraire" }

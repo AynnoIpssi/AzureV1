@@ -101,7 +101,8 @@ fn compiled(rsh_file: &str, rsc_file: &str) -> Result<std::sync::Arc<Compiled>, 
     let cache = CACHE.get_or_init(Default::default);
     let deja = cache.lock().ok().and_then(|c| c.get(&cle).cloned());
     let library = deja.as_ref().map(|v| v.library.clone()).unwrap_or_else(|| Arc::new(Library::for_page(std::path::Path::new(rsh_file))));
-    let stamp = (quand(rsh_file), quand(rsc_file), library.styles());
+    // Le theme compte aussi : en changer recompile la feuille.
+    let stamp = (quand(rsh_file), quand(rsc_file), format!("{}\n{}", crate::theme::version(), library.styles()));
     if let Some(v) = deja
         && v.stamp == stamp
     {

@@ -4,6 +4,7 @@ members = [
     "azure-core",
     "azure-engine",
     "azure-foundation",
+    "azure-libraire",
     "azure-rooter",
     "azure-service",
     "azure-manager",
@@ -41,4 +42,9 @@ opt-level = 3
 # SHA-256 de l'executable a chaque connexion d'une app (identite) : ~30x
 # plus lent sans optimisation.
 [profile.dev.package.azure-core]
+opt-level = 3
+
+# SHA-256, PBKDF2, DEFLATE (azure-libraire, `back`) : ~30x plus lents sans
+# optimisation.
+[profile.dev.package.azure-libraire]
 opt-level = 3

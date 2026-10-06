@@ -80,6 +80,26 @@ fn primary_key_is_automatic_and_unique() {
     assert!(err.contains("unique"), "{err}");
 }
 
+// Plusieurs lignes dans une instruction : les numeros automatiques se
+// suivent, et repartent apres une cle donnee a la main plus grande.
+#[test]
+fn automatic_keys_follow_each_other_within_one_statement() {
+    let mut db = notes();
+    db.run("INSERT INTO notes (titre) VALUES ('a'), ('b')");
+    db.run("INSERT INTO notes (id, titre) VALUES (NULL, 'c'), (50, 'd'), (NULL, 'e'), (20, 'f'), (NULL, 'g')");
+    assert_eq!(db.rows("SELECT id, titre FROM notes WHERE id > 10 ORDER BY id"), ["11|a", "12|b", "13|c", "20|f", "50|d", "51|e", "52|g"]);
+    // Une cle en double dans l'instruction : rien n'est insere.
+    assert!(db.fails("INSERT INTO notes (id, titre) VALUES (NULL, 'h'), (53, 'i')").contains("unique"));
+    assert_eq!(db.rows("SELECT count(*) FROM notes WHERE id > 52"), ["0"]);
+    // Beaucoup de lignes d'un coup restent rapides (une lecture de la table
+    // par instruction, pas par ligne).
+    let valeurs: Vec<String> = (0..20_000).map(|i| format!("('n{i}')")).collect();
+    let debut = std::time::Instant::now();
+    db.run(&format!("INSERT INTO notes (titre) VALUES {}", valeurs.join(", ")));
+    assert!(debut.elapsed() < std::time::Duration::from_secs(20), "{:?}", debut.elapsed());
+    assert_eq!(db.rows("SELECT min(id), max(id), count(*) FROM notes WHERE id > 52"), ["53|20052|20000"]);
+}
+
 #[test]
 fn constraints_and_types_are_checked() {
     let mut db = notes();
@@ -340,7 +360,7 @@ fn syntax_errors_say_where() {
     let mut db = Db::new("syntax");
     let err = db.fails("SELECT * FORM notes");
     assert!(err.contains("ligne 1"), "{err}");
-    assert!(db.fails("CREATE TABLE t (x BLOB)").contains("type inconnu"));
+    assert!(db.fails("CREATE TABLE t (x GEOMETRY)").contains("type inconnu"));
     assert!(db.fails("SELECT 'pas ferme").contains("jamais ferme"));
     assert!(db.fails("SELECT * FROM @x.notes").contains("numero d'app"));
     db.run("-- un commentaire\nCREATE TABLE t (x INT) /* et un autre */;");

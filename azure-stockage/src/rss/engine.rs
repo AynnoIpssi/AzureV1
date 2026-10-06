@@ -1,8 +1,9 @@
-// Execute les instructions RsS pour une app, dans le daemon de stockage.
+// Execute les instructions RsS pour une app, dans le daemon de stockage
+// (ou sur un autre `Depot` : Azure Data s'en sert sur un fichier SQLite).
 //
 // Supporte :
-// - CREATE TABLE [IF NOT EXISTS] (INT, FLOAT, TEXT, BOOL ; PRIMARY KEY,
-//   UNIQUE, NOT NULL, DEFAULT), DROP TABLE [IF EXISTS] ;
+// - CREATE TABLE [IF NOT EXISTS] (INT, FLOAT, TEXT, BOOL, BLOB, ANY ;
+//   PRIMARY KEY, UNIQUE, NOT NULL, DEFAULT), DROP TABLE [IF EXISTS] ;
 // - CREATE [UNIQUE] INDEX nom ON table (colonne), DROP INDEX nom ;
 // - INSERT INTO t [(cols)] VALUES (...), (...) ; UPDATE ... SET ... WHERE ;
 //   DELETE FROM ... WHERE ;
@@ -48,6 +49,37 @@ pub struct Login {
 
 type TableKey = (u32, String);
 
+/// Ou vivent les tables que le moteur lit et ecrit : le stockage d'Azure
+/// (`AzureStockage`), ou autre chose qui sait rendre des `Table` (Azure
+/// Data s'en sert pour faire parler RsS a un fichier SQLite).
+pub trait Depot {
+    /// Les noms des tables de `owner`, tries.
+    fn catalog(&self, owner: u32) -> Result<BTreeSet<String>, String>;
+    fn table(&mut self, owner: u32, name: &str) -> Result<Option<&Table>, String>;
+    /// Applique d'un coup les tables modifiees (`None` = supprimee).
+    fn commit(&mut self, changes: Vec<(u32, String, Option<Table>)>) -> Result<(), String>;
+    /// Le role du compte `user` de l'app `owner`, `None` s'il est refuse.
+    fn check_account(&self, owner: u32, user: &str, password: &str) -> Result<Option<Role>, String>;
+}
+
+impl Depot for AzureStockage {
+    fn catalog(&self, owner: u32) -> Result<BTreeSet<String>, String> {
+        self.rss_catalog(owner)
+    }
+
+    fn table(&mut self, owner: u32, name: &str) -> Result<Option<&Table>, String> {
+        self.rss_table(owner, name)
+    }
+
+    fn commit(&mut self, changes: Vec<(u32, String, Option<Table>)>) -> Result<(), String> {
+        self.rss_commit(changes)
+    }
+
+    fn check_account(&self, owner: u32, user: &str, password: &str) -> Result<Option<Role>, String> {
+        AzureStockage::check_account(self, owner, user, password)
+    }
+}
+
 #[derive(Clone, Default)]
 struct Tx {
     // Tables modifiees par la transaction (`None` = supprimee).
@@ -76,7 +108,7 @@ impl Session {
 /// Execute le texte `sql` (une ou plusieurs instructions separees par `;`)
 /// au nom de l'app `app`. Rend un resultat par instruction ; s'arrete a la
 /// premiere erreur.
-pub fn execute(stockage: &mut AzureStockage, session: &mut Session, app: u32, sql: &str, params: &[Value], logins: &[Login]) -> Result<Vec<RssResult>, String> {
+pub fn execute(stockage: &mut dyn Depot, session: &mut Session, app: u32, sql: &str, params: &[Value], logins: &[Login]) -> Result<Vec<RssResult>, String> {
     let statements = parse(sql)?;
     let mut results = Vec::new();
     for statement in &statements {
@@ -119,11 +151,11 @@ pub fn execute(stockage: &mut AzureStockage, session: &mut Session, app: u32, sq
     Ok(results)
 }
 
-fn commit(stockage: &mut AzureStockage, tx: Tx) -> Result<(), String> {
+fn commit(stockage: &mut dyn Depot, tx: Tx) -> Result<(), String> {
     let mut changes = Vec::new();
     for ((owner, name), table) in tx.tables {
         let base = tx.base.get(&(owner, name.clone())).copied().flatten();
-        let current = stockage.rss_table(owner, &name)?.map(|t| t.version);
+        let current = stockage.table(owner, &name)?.map(|t| t.version);
         if current != base {
             return Err(format!("Conflit : la table '{name}' a ete modifiee par une autre connexion pendant la transaction, recommencer"));
         }
@@ -132,11 +164,11 @@ fn commit(stockage: &mut AzureStockage, tx: Tx) -> Result<(), String> {
             t
         })));
     }
-    stockage.rss_commit(changes)
+    stockage.commit(changes)
 }
 
 struct Exec<'a> {
-    stockage: &'a mut AzureStockage,
+    stockage: &'a mut dyn Depot,
     tx: &'a mut Tx,
     app: u32,
     params: &'a [Value],
@@ -183,12 +215,12 @@ impl Exec<'_> {
         if self.tx.tables.contains_key(&key) {
             return Ok(self.tx.tables.get(&key).and_then(Option::as_ref));
         }
-        self.stockage.rss_table(owner, name)
+        self.stockage.table(owner, name)
     }
 
     fn remember_base(&mut self, key: &TableKey) -> Result<(), String> {
         if !self.tx.base.contains_key(key) {
-            let version = self.stockage.rss_table(key.0, &key.1)?.map(|t| t.version);
+            let version = self.stockage.table(key.0, &key.1)?.map(|t| t.version);
             self.tx.base.insert(key.clone(), version);
         }
         Ok(())
@@ -199,7 +231,7 @@ impl Exec<'_> {
         let key = (owner, name.to_string());
         self.remember_base(&key)?;
         if !self.tx.tables.contains_key(&key) {
-            let table = self.stockage.rss_table(owner, name)?.cloned();
+            let table = self.stockage.table(owner, name)?.cloned();
             self.tx.tables.insert(key.clone(), table);
         }
         self.tx.tables.get_mut(&key).and_then(Option::as_mut).ok_or_else(|| format!("Table '{name}' introuvable"))
@@ -235,7 +267,7 @@ impl Exec<'_> {
 
     // Tables visibles de cette app (catalogue + transaction en cours).
     fn table_names(&mut self) -> Result<BTreeSet<String>, String> {
-        let mut names = self.stockage.rss_catalog(self.app)?;
+        let mut names = self.stockage.catalog(self.app)?;
         for ((owner, name), table) in &self.tx.tables {
             if *owner == self.app {
                 if table.is_some() { names.insert(name.clone()) } else { names.remove(name) };
@@ -359,8 +391,10 @@ impl Exec<'_> {
             prepared.push(values);
         }
         let table = self.table_mut(owner, &tref.name)?;
+        // La plus grande cle primaire : lue une fois pour toute l'instruction.
+        let mut max = None;
         for values in prepared {
-            let row = table.prepare_row(values)?;
+            let row = table.prepare_row_after(values, &mut max)?;
             table.insert(row);
         }
         table.rebuild()?;
@@ -631,7 +665,9 @@ fn matches_filter(filter: Option<&Expr>, row: &RowRef, params: &[Value]) -> Resu
 }
 
 fn column(row: &RowRef, table: Option<&str>, name: &str) -> Result<Value, String> {
-    let mut found = row.cols.iter().enumerate().filter(|(_, (t, c))| c == name && table.is_none_or(|x| x == t));
+    let named = |exact: bool| row.cols.iter().enumerate().filter(move |(_, (t, c))| (if exact { c == name } else { c.eq_ignore_ascii_case(name) }) && table.is_none_or(|x| x == t));
+    // Le nom exact d'abord ; sinon a la casse pres (`nom` trouve `Nom`).
+    let mut found = if named(true).next().is_some() { named(true).collect::<Vec<_>>() } else { named(false).collect() }.into_iter();
     match (found.next(), found.next()) {
         (Some((i, _)), None) => Ok(row.values[i].clone()),
         (None, _) => Err(match table {

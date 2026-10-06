@@ -7,4 +7,5 @@ pub mod fonts;
 pub mod text_block;
 pub mod draw_control;
 pub mod draw_toile;
+pub mod draw_graphe;
 pub mod form;

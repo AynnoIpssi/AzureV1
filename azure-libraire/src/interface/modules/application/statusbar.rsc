@@ -1,0 +1,1 @@
+.az-statusbar { display: flex; flex-direction: row; align-items: center; gap: 14px; height: 28px; flex-shrink: 0; padding: 0 14px; background-color: $fond-barre; border-top: 1px solid $trait/6; color: $texte-faible; font-size: 12px; }

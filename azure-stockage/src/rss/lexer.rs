@@ -9,6 +9,8 @@ pub enum Tok {
     Int(i64),
     Float(f64),
     Str(String),
+    /// Octets `x'CAFE'`.
+    Blob(Vec<u8>),
     /// Parametre `?`, remplace par une valeur fournie a part.
     Param,
     Sym(&'static str),
@@ -58,7 +60,16 @@ pub fn tokenize(input: &str) -> Result<Vec<Token>, String> {
             advance(&mut i, &mut line, &mut column, len, &chars);
             continue;
         }
-        let tok = if c.is_alphabetic() || c == '_' {
+        let tok = if (c == 'x' || c == 'X') && chars.get(i + 1) == Some(&'\'') {
+            let len = chars[i + 2..].iter().position(|&c| c == '\'').ok_or_else(|| err("octets x'...' jamais fermes"))?;
+            let hex: Vec<char> = chars[i + 2..i + 2 + len].to_vec();
+            if hex.len() % 2 != 0 || !hex.iter().all(char::is_ascii_hexdigit) {
+                return Err(err("x'...' attend des paires de chiffres hexadecimaux"));
+            }
+            let bytes = hex.chunks(2).map(|p| (p[0].to_digit(16).unwrap() * 16 + p[1].to_digit(16).unwrap()) as u8).collect();
+            advance(&mut i, &mut line, &mut column, len + 3, &chars);
+            Tok::Blob(bytes)
+        } else if c.is_alphabetic() || c == '_' {
             let len = chars[i..].iter().position(|&c| !(c.is_alphanumeric() || c == '_')).unwrap_or(chars.len() - i);
             let text: String = chars[i..i + len].iter().collect::<String>().to_lowercase();
             advance(&mut i, &mut line, &mut column, len, &chars);

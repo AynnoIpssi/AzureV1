@@ -155,6 +155,112 @@ pub(crate) struct LoopState {
     on_tick: Option<OnClick>,
     // L'inspecteur (F12, voir `crate::inspector`).
     pub(crate) inspector: crate::inspector::Inspector,
+    // La boite « Ouvrir » ouverte par-dessus la page (voir `Actif`).
+    selecteur: Option<Actif>,
+}
+
+// La boite « Ouvrir » (voir `crate::selecteur`) pendant qu'elle est a
+// l'ecran. Elle prend la place de la page dans `LoopState::event` : souris,
+// clavier, defilement, essais et inspecteur s'adressent a elle sans rien
+// savoir d'elle. La page attend ici, dessinee dessous, et revient a la
+// fermeture.
+struct Actif {
+    ouvert: crate::selecteur::Ouvert,
+    page: EventState,
+}
+
+// L'arbre de la PAGE de l'app, que la boite « Ouvrir » soit ouverte ou non.
+fn noeuds_page<'a>(event: &'a EventState, selecteur: &'a Option<Actif>) -> &'a [UiNode] {
+    match selecteur {
+        Some(actif) => &actif.page.ui_nodes,
+        None => &event.ui_nodes,
+    }
+}
+
+fn page_mut<'a>(event: &'a mut EventState, selecteur: &'a mut Option<Actif>) -> &'a mut EventState {
+    match selecteur {
+        Some(actif) => &mut actif.page,
+        None => event,
+    }
+}
+
+// Ouvre la boite « Ouvrir » (voir `WindowContext::choisir`) ; deja ouverte,
+// la nouvelle demande la remplace.
+fn ouvrir_selecteur(s: &mut LoopState, demande: crate::selecteur::Selecteur) {
+    let ouvert = crate::selecteur::Ouvert::new(demande);
+    let mut boite = EventState::new(ouvert.noeuds());
+    boite.mouse_x = s.event.mouse_x;
+    boite.mouse_y = s.event.mouse_y;
+    boite.held_modifiers = s.event.held_modifiers.clone();
+    boite.clipboard = s.event.clipboard.clone();
+    match s.selecteur.as_mut() {
+        Some(actif) => {
+            actif.ouvert = ouvert;
+            s.event = boite;
+        }
+        None => {
+            let mut page = std::mem::replace(&mut s.event, boite);
+            // Le relachement du clic (ou de la touche) qui ouvre la boite
+            // ira a la boite : la page ne doit pas le croire encore tenu.
+            interact::release_all(&mut page.ui_nodes);
+            page.dragging = false;
+            page.scroll_drag = None;
+            page.drag = None;
+            page.held_key = None;
+            page.next_repeat_at = None;
+            page.tooltip = None;
+            s.selecteur = Some(Actif { ouvert, page });
+        }
+    }
+    s.dirty = true;
+}
+
+// Ferme la boite « Ouvrir » : la page reprend sa place.
+fn fermer_selecteur(s: &mut LoopState) -> Option<crate::selecteur::Ouvert> {
+    let Actif { ouvert, page } = s.selecteur.take()?;
+    let boite = std::mem::replace(&mut s.event, page);
+    s.event.mouse_x = boite.mouse_x;
+    s.event.mouse_y = boite.mouse_y;
+    s.event.held_modifiers = boite.held_modifiers;
+    s.event.clipboard = boite.clipboard;
+    s.event.tooltip_sought = false;
+    s.dirty = true;
+    Some(ouvert)
+}
+
+// Un clic (ou une activation au clavier) dans la boite « Ouvrir ».
+fn clic_selecteur(s: &mut LoopState, h: &mut dyn Hote) {
+    use crate::selecteur::Suite;
+    let Some(id) = s.event.clicked_id.clone() else { return };
+    let double = s.event.last_click.is_some_and(|(_, _, _, rang)| rang >= 2);
+    let Some(actif) = s.selecteur.as_mut() else { return };
+    match actif.ouvert.cliquer(&id, double) {
+        Suite::Rien => {}
+        suite @ (Suite::Liste | Suite::Garder) => {
+            let mut noeuds = actif.ouvert.noeuds();
+            if suite == Suite::Garder {
+                let content = content_box(s);
+                interact::carry_scroll_anchored(&s.event.ui_nodes, &mut noeuds, content);
+            }
+            s.event.ui_nodes = noeuds;
+            s.event.tooltip = None;
+            s.event.tooltip_sought = false;
+            s.dirty = true;
+        }
+        Suite::Annuler => {
+            fermer_selecteur(s);
+        }
+        Suite::Choisi(chemin) => {
+            let Some(ouvert) = fermer_selecteur(s) else { return };
+            let chemin = chemin.to_string_lossy().into_owned();
+            if let Some(champ) = ouvert.demande().champ() {
+                interact::set_field_text(&mut s.event.ui_nodes, champ, &chemin);
+            }
+            // L'app apprend le choix comme un clic sur `puis`.
+            s.event.clicked_id = ouvert.demande().suite().map(str::to_string);
+            appeler_on_click(s, h, Some(&chemin));
+        }
+    }
 }
 
 // Rappel d'un flux ecoute (voir `AzureWindow::flux`).
@@ -226,6 +332,11 @@ pub(crate) fn redraw(state: &mut LoopState) {
     // `(0, 0, width, height)` directement, qui sert de boite racine au
     // layout en pourcentage de `ui::services::draw_ui`.
     let content = content_box(state);
+    // La boite « Ouvrir » est ouverte : la page reste visible dessous,
+    // sans survol ni curseur.
+    if let Some(actif) = &state.selecteur {
+        draw_ui(&actif.page.ui_nodes, content, &mut state.canvas, -1, -1, false);
+    }
     draw_ui(
         &state.event.ui_nodes,
         content,
@@ -261,6 +372,9 @@ struct Flash {
 // Applique ce qu'un rappel a demande (voir `window_context::Effects`).
 fn apply_effects(s: &mut LoopState, effects: Effects) {
     s.keep_scroll |= effects.keep_scroll;
+    if let Some(demande) = effects.selecteur {
+        ouvrir_selecteur(s, demande);
+    }
     if effects.activate.is_some() {
         s.activate = effects.activate;
     }
@@ -305,13 +419,24 @@ fn end_flashes(s: &mut LoopState) -> bool {
 // `AzureWindow::on_click` avec le contexte du moment (bouton touche,
 // valeurs des champs) - apres un clic souris ou une activation au clavier.
 fn call_on_click(s: &mut LoopState, h: &mut dyn Hote) {
+    // La boite « Ouvrir » est ouverte : le clic est pour elle, pas pour l'app.
+    if s.selecteur.is_some() {
+        clic_selecteur(s, h);
+        return;
+    }
+    appeler_on_click(s, h, None);
+}
+
+// `choix` : le chemin qui vient d'etre choisi dans la boite « Ouvrir »
+// (voir `WindowContext::choix`).
+fn appeler_on_click(s: &mut LoopState, h: &mut dyn Hote, choix: Option<&str>) {
     let Some(mut on_click) = s.on_click.take() else { return };
     let clicked = s.event.clicked_id.clone();
     // Jeton demande seulement si le rappel en a besoin (voir
     // `WindowContext::activation_token`).
     let mut token = || h.jeton_activation();
     let nom = crate::perf::generaliser(clicked.as_deref().unwrap_or("?"));
-    let (scroll, effects) = crate::perf::mesurer("Clic", &nom, || with_context_activation(s, clicked.as_deref(), Some(&mut token), |ctx| on_click(ctx)));
+    let (scroll, effects) = crate::perf::mesurer("Clic", &nom, || with_context_activation(s, clicked.as_deref(), Some(&mut token), choix, |ctx| on_click(ctx)));
     s.on_click = Some(on_click);
     let plein_ecran = effects.plein_ecran;
     apply_effects(s, effects);
@@ -346,11 +471,11 @@ fn call_on_drop(s: &mut LoopState, dropped: &interact::Dropped) {
 // Appelle `f` avec le contexte du moment (valeurs des champs, stockage,
 // routeurs) ; rend ce qu'il a demande (defilement, effets).
 fn with_context(s: &mut LoopState, clicked: Option<&str>, f: impl FnOnce(&mut WindowContext)) -> (Option<String>, Effects) {
-    with_context_activation(s, clicked, None, f)
+    with_context_activation(s, clicked, None, None, f)
 }
 
-fn with_context_activation(s: &mut LoopState, clicked: Option<&str>, activation: Option<&mut dyn FnMut() -> Option<String>>, f: impl FnOnce(&mut WindowContext)) -> (Option<String>, Effects) {
-    let values = crate::ui::services::form::form_values(&s.event.ui_nodes);
+fn with_context_activation(s: &mut LoopState, clicked: Option<&str>, activation: Option<&mut dyn FnMut() -> Option<String>>, choix: Option<&str>, f: impl FnOnce(&mut WindowContext)) -> (Option<String>, Effects) {
+    let values = crate::ui::services::form::form_values(noeuds_page(&s.event, &s.selecteur));
     let mut ctx = WindowContext {
         intra: s.intra.as_ref(),
         nav: s.nav.as_mut(),
@@ -364,6 +489,7 @@ fn with_context_activation(s: &mut LoopState, clicked: Option<&str>, activation:
         effects: Effects::default(),
         // Ramenee a la duree de vie du contexte.
         activation: activation.map(|a| a as &mut dyn FnMut() -> Option<String>),
+        choix,
     };
     f(&mut ctx);
     (ctx.scroll_request.take(), std::mem::take(&mut ctx.effects))
@@ -749,7 +875,7 @@ pub(crate) fn sur_tic(s: &mut LoopState, h: &mut dyn Hote, layout: &std::cell::C
     let mut all_effects = Vec::new();
     for (listener, handler) in s.fluxes.iter_mut() {
         for event in listener.poll() {
-            let values = crate::ui::services::form::form_values(&s.event.ui_nodes);
+            let values = crate::ui::services::form::form_values(noeuds_page(&s.event, &s.selecteur));
             let mut ctx = WindowContext {
                 intra: s.intra.as_ref(),
                 nav: s.nav.as_mut(),
@@ -762,6 +888,7 @@ pub(crate) fn sur_tic(s: &mut LoopState, h: &mut dyn Hote, layout: &std::cell::C
                 scroll_request: None,
                 effects: Effects::default(),
                 activation: None,
+                choix: None,
             };
             crate::perf::mesurer("Flux", "écoute", || handler(&mut ctx, &event, listener.state()));
             scrolls.extend(ctx.scroll_request.take());
@@ -805,14 +932,16 @@ pub(crate) fn sur_tic(s: &mut LoopState, h: &mut dyn Hote, layout: &std::cell::C
     }
 
     if let Some(mut nodes) = pending_screen {
+        // La page de l'app, meme sous la boite « Ouvrir ».
+        let page = page_mut(&mut s.event, &mut s.selecteur);
         if std::mem::take(&mut s.keep_scroll) {
-            interact::carry_scroll_anchored(&s.event.ui_nodes, &mut nodes, content);
+            interact::carry_scroll_anchored(&page.ui_nodes, &mut nodes, content);
         }
         // Les toiles gardent leur vue (zoom, decalage).
-        interact::carry_toiles(&s.event.ui_nodes, &mut nodes);
-        s.event.ui_nodes = nodes;
-        s.event.tooltip_sought = false;
-        s.event.command_menu = None;
+        interact::carry_toiles(&page.ui_nodes, &mut nodes);
+        page.ui_nodes = nodes;
+        page.tooltip_sought = false;
+        page.command_menu = None;
         s.flashes.clear();
         s.dirty = true;
         s.perf.cause("nouvel ecran");
@@ -1156,6 +1285,7 @@ impl AzureWindow {
             fluxes,
             on_tick,
             inspector: Default::default(),
+            selecteur: None,
         }
     }
 

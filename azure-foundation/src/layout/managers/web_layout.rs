@@ -174,7 +174,7 @@ fn fills_width(node: &UiNode) -> bool {
     match node {
         UiNode::Container(_) | UiNode::Label(_) => true,
         UiNode::TextArea(area) => !area.single_line,
-        UiNode::Control(c) => c.kind == crate::ui::models::control::ControlKind::Progress,
+        UiNode::Control(c) => matches!(c.kind, crate::ui::models::control::ControlKind::Progress | crate::ui::models::control::ControlKind::Graphe),
         _ => false,
     }
 }
@@ -431,7 +431,7 @@ fn place_flex(css: &CssBox, children: &[UiNode], cw: f32, ch: Option<f32>) -> Pl
             let basis = to_border_box(c, c.flex_basis, Some(cw), frame_w).or_else(|| to_border_box(c, c.width, Some(cw), frame_w));
             let base = basis.unwrap_or_else(|| measure(child, UNBOUNDED, ch, false).0);
             let min_auto = if c.min_width.is_auto() {
-                if child_scrolls(child) { frame_w } else { min_content_width(child) + frame_w }
+                if child_scrolls(child) { frame_w } else if let (UiNode::Control(_), Some(voulue)) = (child, basis) { voulue } else { min_content_width(child) + frame_w }
             } else {
                 to_border_box(c, c.min_width, Some(cw), frame_w).unwrap_or(0.0)
             };
@@ -444,7 +444,10 @@ fn place_flex(css: &CssBox, children: &[UiNode], cw: f32, ch: Option<f32>) -> Pl
             let basis = to_border_box(c, c.flex_basis, ch, frame_h).or_else(|| to_border_box(c, c.height, ch, frame_h));
             let base = basis.unwrap_or_else(|| content_height(child, width - frame_w, None) + frame_h);
             let min = if c.min_height.is_auto() {
-                if child_scrolls(child) { frame_h } else { content_height(child, width - frame_w, None) + frame_h }
+                // Un champ (graphe, toile...) n'a pas de contenu a proteger :
+                // la hauteur qu'on lui donne peut etre plus petite que sa
+                // hauteur par defaut.
+                if child_scrolls(child) { frame_h } else if let (UiNode::Control(_), Some(voulue)) = (child, basis) { voulue } else { content_height(child, width - frame_w, None) + frame_h }
             } else {
                 to_border_box(c, c.min_height, ch, frame_h).unwrap_or(0.0)
             };

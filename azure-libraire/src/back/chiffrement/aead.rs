@@ -1,10 +1,10 @@
 // ChaCha20-Poly1305 (RFC 8439, section 2.8) : chiffre ET authentifie. Une
 // donnee modifiee sur le disque, ou dechiffree avec la mauvaise cle ou le
 // mauvais contexte (`aad`), est refusee au lieu de rendre n'importe quoi.
-use crate::crypto::chacha20;
-use crate::crypto::hmac::constant_time_eq;
-use crate::crypto::poly1305::poly1305;
-use crate::crypto::random::random_bytes;
+use super::chacha20;
+use crate::back::hachage::hmac::constant_time_eq;
+use super::poly1305::poly1305;
+use super::random::random_bytes;
 
 pub const NONCE_LEN: usize = 12;
 pub const TAG_LEN: usize = 16;
